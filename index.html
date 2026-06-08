@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Primary Meta Tags -->
+  <meta name="title" content="RAM: Reachability Across Morphologies">
+  <meta name="description"
+    content="RAM is a morphology-conditioned implicit neural representation that predicts pose reachability across robot morphologies, enabling fast, differentiable reachability evaluation for design and planning.">
+  <meta name="keywords"
+    content="RAM, Reachability, Morphology, Implicit Neural Representation, Robotics, Reachability Dataset, Design Optimisation">
+  <meta name="author" content="Tim Walter, Xinyu Chen, Jonathan Külz, Matthias Althoff">
+  <meta name="robots" content="index, follow">
+  <meta name="language" content="English">
+
+  <!-- Academic/Research Specific -->
+  <meta name="citation_title" content="RAM: Reachability Across Morphologies">
+  <meta name="citation_author" content="Walter, Tim">
+  <meta name="citation_author" content="Chen, Xinyu">
+  <meta name="citation_author" content="K\" ulz, Jonathan">
+  <meta name="citation_author" content="Althoff, Matthias">
+  <meta name="citation_publication_date" content="2026">
+  <meta name="citation_conference_title" content="Under Review">
+
+  <!-- Additional SEO -->
+  <meta name="theme-color" content="#2563eb">
+  <meta name="msapplication-TileColor" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://ajax.googleapis.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+  <title>RAM: Reachability Across Morphologies</title>
+
+  <!-- Favicon and App Icons -->
+  <link rel="icon" type="image/x-icon" href="static/images/TUM.svg">
+  <link rel="apple-touch-icon" href="static/images/TUM.svg">
+
+  <!-- Critical CSS - Load synchronously -->
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+
+  <!-- Non-critical CSS - Load asynchronously -->
+  <link rel="preload" href="static/css/bulma-carousel.min.css" as="style"
+    onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/bulma-slider.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="static/css/fontawesome.all.min.css" as="style"
+    onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css" as="style"
+    onload="this.onload=null;this.rel='stylesheet'">
+
+  <!-- Fallback for browsers that don't support preload -->
+  <noscript>
+    <link rel="stylesheet" href="static/css/bulma-carousel.min.css">
+    <link rel="stylesheet" href="static/css/bulma-slider.min.css">
+    <link rel="stylesheet" href="static/css/fontawesome.all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  </noscript>
+
+  <!-- Fonts - Optimized loading -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Defer non-critical JavaScript -->
+  <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="static/js/fontawesome.all.min.js"></script>
+  <script defer src="static/js/bulma-carousel.min.js"></script>
+  <script defer src="static/js/bulma-slider.min.js"></script>
+  <script defer src="static/js/index.js"></script>
+
+  <!-- Structured Data for Academic Papers -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ScholarlyArticle",
+    "headline": "RAM: Reachability Across Morphologies",
+    "description": "RAM is a morphology-conditioned implicit neural representation that predicts pose reachability across robot morphologies, enabling fast, differentiable reachability evaluation for design and planning.",
+    "author": [
+      { "@type": "Person", "name": "Tim Walter", "affiliation": { "@type": "Organization", "name": "Technical University of Munich" } },
+      { "@type": "Person", "name": "Xinyu Chen", "affiliation": { "@type": "Organization", "name": "University of Hamburg" } },
+      { "@type": "Person", "name": "Jonathan K\"ulz", "affiliation": { "@type": "Organization", "name": "Technical University of Munich" } },
+      { "@type": "Person", "name": "Matthias Althoff", "affiliation": { "@type": "Organization", "name": "Technical University of Munich" } }
+    ],
+    "datePublished": "2026-01-01",
+    "keywords": ["reachability", "morphology", "implicit neural representation", "robotics", "design optimisation"],
+    "isAccessibleForFree": true
+  }
+  </script>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+
+<body>
+
+  <!-- Scroll to Top Button -->
+  <button class="scroll-to-top" onclick="scrollToTop()" title="Scroll to top" aria-label="Scroll to top">
+    <i class="fas fa-chevron-up"></i>
+  </button>
+
+
+
+  <main id="main-content">
+    <section class="hero">
+      <div class="hero-body">
+        <div class="container is-max-desktop">
+          <div class="columns is-centered">
+            <div class="column has-text-centered">
+              <h1 class="title is-1 publication-title">RAM: Reachability Across Morphologies</h1>
+              <div class="is-size-5 publication-authors">
+                <span class="author-block"><a href=https://timwalter.github.io/ target="_blank">Tim
+                    Walter</a><sup>1</sup>,</span>
+                <span class="author-block"><a href=https://www.inf.uni-hamburg.de/en/inst/ab/hci/people/xinyu.html
+                    target="_blank">Xinyu Chen</a><sup>2</sup>,</span>
+                <span class="author-block"><a href=https://jonathankuelz.github.io/ target="_blank">Jonathan
+                    Külz</a><sup>1</sup>,</span>
+                <span class="author-block"><a href=https://www.ce.cit.tum.de/cps/members/prof-dr-ing-matthias-althoff/
+                    target="_blank">Matthias Althoff</a><sup>1</sup></span>
+              </div>
+
+              <div class="is-size-5 publication-institution">
+                <span class="institution-block"><sup>1</sup>Technical University of Munich, <sup>2</sup>University of
+                  Hamburg<br>Under Review</span>
+              </div>
+
+              <div class="column has-text-centered">
+                <div class="publication-links">
+                  <span class="link-block">
+                    <a href="https://arxiv.org/pdf/2601.18923v1" target="_blank"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fas fa-file-pdf"></i>
+                      </span>
+                      <span>Paper</span>
+                    </a>
+                  </span>
+
+                  <span class="link-block">
+                    <a href="https://github.com/TimWalter/ram" target="_blank"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fab fa-github"></i>
+                      </span>
+                      <span>Code</span>
+                    </a>
+                  </span>
+
+                  <span class="link-block">
+                    <a href="https://arxiv.org/abs/2601.18923v1" target="_blank"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="ai ai-arxiv"></i>
+                      </span>
+                      <span>arXiv</span>
+                    </a>
+                  </span>
+                  <span class="link-block">
+                    <a id="dataset-email-btn" href="#" class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <img src="static/images/lrz.png" alt="LRZ" style="height:1em; width:auto;" />
+                      </span>
+                      <span>Dataset</span>
+                    </a>
+                  </span>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Teaser video-->
+    <section class="hero teaser">
+      <div class="container is-max-desktop">
+        <div class="hero-body">
+          <div class="publication-banner teaser-banner">
+            <video poster="" autoplay controls muted loop preload="metadata" playsinline>
+              <source src="static/videos/RAM_teaser.mp4" type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- End teaser video -->
+
+    <!-- Start tldr -->
+    <section class="section hero is-light">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered has-text-centered">
+          <div class="column is-four-fifths">
+            <h2 class="title is-3">tl;dr</h2>
+            <div class="content has-text-justified">
+              <p>
+                RAM provides a fast, differentiable surrogate for pose reachability across morphologies, enabling rapid
+                design and planning workflows.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </section>
+    <!-- End tldr -->
+
+    <!-- Paper abstract -->
+    <section class="section hero">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered has-text-centered">
+          <div class="column is-four-fifths">
+            <h2 class="title is-3">Abstract</h2>
+            <div class="content has-text-justified">
+              <p>
+                Many stages of the robotic lifecycle, from morphology synthesis to operation, rely fundamentally on the
+                reachable workspace. However, current methods for approximating workspaces are slow, imprecise, or tied
+                to a single morphology. We introduce <strong>Reachability Across Morphologies (RAM)</strong>: a
+                morphology-conditioned, implicit neural representation that acts as a fast, differentiable surrogate for
+                pose reachability, generalising to unseen morphologies while inherently accounting for self-collisions.
+                To train RAM, we publish a large-scale dataset of $3 \cdot 10^{10}$ samples generated solely from
+                forward kinematics. Experiments show that our model achieves an $F_1\text{-score}$ of $86\%$ at
+                nanosecond inference, outperforming the baseline by $14\%$ while reducing inference time by three orders
+                of magnitude. We further demonstrate speed-ups of one and two orders of magnitude for gradient-based
+                morphology and trajectory optimisation, respectively.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- End paper abstract -->
+
+
+    <!-- Key Contributions -->
+    <section class="section hero">
+      <div class="container is-max-desktop">
+        <h2 class="title is-3 has-text-centered">Highlights</h2>
+        <div class="columns is-multiline">
+
+          <div class="column is-12 contribution-column">
+            <div class="box contribution-box">
+              <h3 class="title is-5 has-text-centered"><i class="fas fa-robot"></i> RAM</h3>
+              <p>A morphology-conditioned implicit neural representation that evaluates pose reachability in
+                nanoseconds, generalises to unseen morphologies without retraining, and inherently accounts for
+                self-collisions.</p>
+            </div>
+          </div>
+
+          <div class="column is-half contribution-column">
+            <div class="box contribution-box">
+              <h3 class="title is-5">
+                <i class="fas fa-database"></i> Large-scale Reachability Dataset
+              </h3>
+              <p>
+                A public dataset of \(3\cdot10^{10}\) samples across \(3\cdot10^4\)
+                unique robot morphologies, generated solely from forward kinematics
+                with pose sampling restricted to geometrically plausible regions.
+              </p>
+            </div>
+          </div>
+
+          <div class="column is-half contribution-column">
+            <div class="box contribution-box">
+              <h3 class="title is-5">
+                <i class="fas fa-rocket"></i> Accelerating Morphology &amp; <br>
+                <span style="display:inline-block; padding-left:1.3em;">Trajectory Optimisation</span>
+              </h3>
+              <p>
+                RAM's differentiability enables gradient-based morphology and
+                trajectory optimisation at one and two orders of magnitude lower
+                computational cost respectively compared to numerical inverse kinematics.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+    <!-- End Key Contributions -->
+
+
+    <!-- Summary -->
+    <section class="section hero is-light">
+      <div class="container is-max-desktop">
+        <h2 class="title is-3 has-text-centered">Summary</h2>
+        <div class="content has-text-centered">
+          <!-- TODO: Add Figure 2 - Self-supervised pretraining overview -->
+          <img src="static/images/HeroFigure.svg" alt="RAM overview"
+            style="width: 100%; height: auto; display: block;" />
+          <p class="has-text-justified" style="margin-top: 1rem;">
+            <strong>RAM Overview:</strong> We present RAM, a surrogate model for robot reachability. Trained on a
+            diverse dataset of thirty billion samples (I), the morphology-conditioned implicit neural representation
+            (II) generalises accurately to unseen morphologies (III). Due to its differentiability and efficient
+            inference, RAM can substantially accelerate downstream robotics tasks by replacing inverse kinematics (IV).
+          </p>
+        </div>
+      </div>
+    </section>
+    <!-- End Method Overview -->
+    <!-- ═══════════════════════════════════════════════════════════
+         DATASET
+    ════════════════════════════════════════════════════════════ -->
+<section class="section hero">
+      <div class="container is-max-desktop">
+        <h2 class="title is-3 has-text-centered">Dataset</h2>
+
+        <div class="columns is-multiline" style="margin-top:1.5rem;">
+          <div class="column is-one-quarter has-text-centered">
+            <p class="heading">Samples</p>
+            <p class="title is-3">\(3\cdot10^{10}\)</p>
+          </div>
+          <div class="column is-one-quarter has-text-centered">
+            <p class="heading">Morphologies</p>
+            <p class="title is-3">\(3\cdot10^{4}\)</p>
+          </div>
+          <div class="column is-one-quarter has-text-centered">
+            <p class="heading">Dataset Size</p>
+            <p class="title is-3">202 GB</p>
+          </div>
+          <div class="column is-one-quarter has-text-centered">
+            <p class="heading">GPU Hours (H100)</p>
+            <p class="title is-3">360</p>
+          </div>
+        </div>
+
+        <div class="columns is-multiline" style="margin-top:1rem;">
+
+          <div class="column is-one-third contribution-column">
+            <div class="box contribution-box pipeline-trigger is-active" data-slide-index="0" style="cursor: pointer;">
+              <h3 class="title is-5"><i class="fas fa-cogs"></i> Morphology</h3>
+              <p>
+                Serial kinematic chains of 5–7 revolute joints are sampled via
+                hierarchical rejection sampling over Modified Denavit-Hartenberg
+                parameters, yielding uniform coverage of the valid morphological space
+                and covering operable, non-degenerate, conventional designs.
+              </p>
+            </div>
+          </div>
+
+          <div class="column is-one-third contribution-column">
+            <div class="box contribution-box pipeline-trigger" data-slide-index="1" style="cursor: pointer;">
+              <h3 class="title is-5"><i class="fas fa-map-marker-alt"></i> Pose</h3>
+              <p>
+                Poses are sampled uniformly from \(\mathcal{B}^3(t_0, r_\text{mov}) \rtimes SO(3)\),
+                the geometrically plausible region centred at the first joint with
+                moveable length \(r_\text{mov}\). This concentrates samples where the
+                robot can actually reach, maximising the learning signal.
+              </p>
+            </div>
+          </div>
+
+          <div class="column is-one-third contribution-column">
+            <div class="box contribution-box pipeline-trigger" data-slide-index="2" style="cursor: pointer;">
+              <h3 class="title is-5"><i class="fas fa-tag"></i> Reachability Label</h3>
+              <p>
+                \(SE(3)\) is discretised into cubic \(\mathbb{R}^3\) voxels and
+                \(SO(3)\) Voronoi cells. Joint configurations are sampled
+                via forward kinematics to mark cells reachable, achieving an
+                \(F_1\)-score of 91% against analytical reference labels at the chosen
+                resolution — a practical ceiling for RAM training.
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="dataset-carousel-container" style="margin-top: 1.5rem;">
+          
+          <div class="dataset-slide is-active">
+            <div class="pipeline-dual-image">
+              <img src="static/images/MorphologyFigure.svg" alt="Example morphologies" style="padding: 1rem 1rem 0;" />
+              <img src="static/images/PipelineFigure.svg" alt="Morphology sampling pipeline" />
+            </div>
+          </div>
+
+          <div class="dataset-slide">
+            <div class="box" style="padding: 0; overflow: hidden; border: 1px solid var(--border-color); background: #fff;">
+              <img src="static/images/Poses.svg" alt="Sampled poses in the reachable region" style="width: 100%; display: block;" />
+            </div>
+          </div>
+
+          <div class="dataset-slide">
+            <div class="box" style="padding: 0; overflow: hidden; border: 1px solid var(--border-color); background: #fff;">
+              <video id="dataset-video-label" muted loop playsinline controls width="100%" style="display: block;">
+                <source src="static/videos/Labels.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- End Dataset -->
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         RESULTS
+    ════════════════════════════════════════════════════════════ -->
+    <section class="section hero is-light">
+      <div class="container is-max-desktop">
+        <h2 class="title is-3 has-text-centered">Results</h2>
+
+        <!-- Workspace slice figure -->
+   <div class="content has-text-centered">
+          <img src="static/images/Slices.svg" alt="Workspace slice comparison" style="width: 100%; height: auto; display: block; margin: 0 auto;" />
+          <p class="has-text-justified" style="margin-top:1rem;">
+            <strong>Workspace slices.</strong> A fixed-orientation cross-section through a representative workspace,
+            showing ground-truth labels, RAM's prediction, and the GGIK baseline. RAM closely tracks the
+            ground-truth boundary while GGIK produces a blurrier, over-smoothed approximation.
+          </p>
+        </div>
+
+        <!-- RAM vs GGIK table -->
+        <div class="box" style="margin-top:2rem;">
+          <h3 class="title is-5 has-text-centered">RAM vs. GGIK</h3>
+          <p class="has-text-centered" style="margin-bottom:1rem;">
+            Inference measured end-to-end from pose and morphology input to reachability output.
+          </p>
+          <div style="overflow-x:auto;">
+            <table class="table is-striped is-fullwidth">
+              <thead>
+                <tr>
+                  <th>Classifier</th>
+                  <th>Training (h)</th>
+                  <th>Inference (s)</th>
+                  <th>\(F_1\) Random (%)</th>
+                  <th>\(F_1\) Boundary (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>RAM (ours)</strong></td>
+                  <td><strong>57</strong></td>
+                  <td><strong>\(5.7 \cdot 10^{-8}\)</strong></td>
+                  <td><strong>\(86^{+1}_{-1}\)</strong></td>
+                  <td><strong>\(78^{+3}_{-3}\)</strong></td>
+                </tr>
+                <tr>
+                  <td>GGIK</td>
+                  <td>756</td>
+                  <td>\(2.2 \cdot 10^{-2}\)</td>
+                  <td>\(72^{+1}_{-1}\)</td>
+                  <td>\(69^{+3}_{-2}\)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="has-text-centered" style="margin-top:0.75rem;">
+            RAM outperforms GGIK by 14% in \(F_1\)-score while reducing inference time by
+            <strong>more than five orders of magnitude</strong>, training in 57 hours versus one month.
+          </p>
+        </div>
+
+        <!-- Out-of-distribution note -->
+        <div class="content has-text-justified" style="margin-top:1.5rem;">
+          <p>
+            <strong>Generalisation.</strong> Evaluated out-of-distribution on morphologies with 1–4, 8, and 9 DoF,
+            RAM maintains \(F_1\)-scores above 78% for four, eight, and nine DoF, demonstrating robust
+            generalisation beyond its training range of 5–7 DoF. Performance drops substantially below four DoF,
+            where workspace topology is fundamentally different from the training distribution.
+          </p>
+          <p>
+            <strong>Latent space.</strong> Across principal components of the LSTM latent space, DoF shows the
+            highest Spearman correlation (86%), followed by the standard deviation of link lengths (58%),
+            indicating the representation organises itself by kinematic complexity.
+          </p>
+        </div>
+
+      </div>
+    </section>
+    <!-- End Results -->
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         APPLICATIONS
+    ════════════════════════════════════════════════════════════ -->
+    <section class="section hero">
+      <div class="container is-max-desktop">
+        <h2 class="title is-3 has-text-centered">Applications</h2>
+        <p class="subtitle has-text-centered">
+          RAM's differentiability and nanosecond inference unlock gradient-based optimisation
+          that was previously bottlenecked by numerical inverse kinematics.
+        </p>
+
+        <div class="columns" style="margin-top:1.5rem;">
+
+          <!-- Morphology Optimisation -->
+          <div class="column">
+            <div class="box" style="height:100%;">
+              <h3 class="title is-5 has-text-centered">
+                <i class="fas fa-drafting-compass"></i> Morphology Optimisation
+              </h3>
+              <!-- TODO: Figure 5 from paper (RAM / Initial / IK side-by-side) -->
+              <!-- <img src="static/images/morphology_opt.png" alt="Morphology optimisation result" style="width:100%;height:auto;border-radius:6px;" /> -->
+              <div class="content has-text-justified" style="margin-top:1rem;">
+                <p>
+                  Gradient-based optimisation of link lengths and offsets to maximise reachability
+                  of task poses. RAM reduces mean pose error by <strong>78%</strong>
+                  (vs. 69% for IK baseline) while running consistently
+                  <strong> one order of magnitude faster</strong>.
+                  Both methods reduce self-collisions from 16% to 6%.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trajectory Optimisation -->
+          <div class="column">
+            <div class="box" style="height:100%;">
+              <h3 class="title is-5 has-text-centered">
+                <i class="fas fa-route"></i> Trajectory Optimisation
+              </h3>
+              <!-- TODO: Figure A6 from paper or trajectory optimisation video -->
+              <!-- <img src="static/images/trajectory_opt.png" alt="Trajectory optimisation result" style="width:100%;height:auto;border-radius:6px;" /> -->
+              <div class="content has-text-justified" style="margin-top:1rem;">
+                <p>
+                  Waypoints on a nominal trajectory are perturbed in \(SE(3)\) tangent space
+                  to improve reachability. RAM reduces pose error by <strong>62%</strong>
+                  and self-collisions from 10% to 4%, while running
+                  <strong>more than two orders of magnitude faster</strong> than the
+                  implicit-differentiation IK baseline.
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Robot army video placeholder -->
+        <div class="content has-text-centered" style="margin-top:1.5rem;">
+          <!-- TODO: robot army animation (10×10 grid with reachability overlay) -->
+          <!-- <video autoplay muted loop playsinline style="width:100%;border-radius:8px;">
+            <source src="static/videos/robot_army.mp4" type="video/mp4">
+          </video>
+          <p class="has-text-centered" style="margin-top:0.75rem;">
+            RAM evaluated in real time across 100 diverse robot morphologies simultaneously,
+            visualising the reachable workspace of each at nanosecond-per-query throughput.
+          </p> -->
+        </div>
+
+      </div>
+    </section>
+    <!-- End Applications -->
+    <!--BibTex citation -->
+    <section class="section" id="BibTeX">
+      <div class="container is-max-desktop content">
+        <div class="bibtex-header">
+          <h2 class="title">BibTeX</h2>
+          <button class="copy-bibtex-btn" onclick="copyBibTeX()" title="Copy BibTeX to clipboard">
+            <i class="fas fa-copy"></i>
+            <span class="copy-text">Copy</span>
+          </button>
+        </div>
+        <pre id="bibtex-code"><code>@misc{walter2026ram,
+      title={RAM: Reachability Across Morphologies},
+      author={Tim Walter and Xinyu Chen and Jonathan K{\"u}lz and Matthias Althoff},
+      year={2026},
+      eprint={2601.18923},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2601.18923},
+}</code></pre>
+      </div>
+    </section>
+    <!--End BibTex citation -->
+
+    <footer class="footer">
+      <div class="container">
+        <div class="columns is-centered">
+          <div class="column is-8">
+            <div class="content">
+
+              <p>
+                This page was built using the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template"
+                  target="_blank">Academic Project Page Template</a> which was adopted from the <a
+                  href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+                You are free to borrow the of this website, we just ask that you link back to this page in the footer.
+                <br> This website is licensed under a <a rel="license"
+                  href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+                  Commons Attribution-ShareAlike 4.0 International License</a>.
+              </p>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+
+    </div>
+    </div>
+  </main>
+</body>
+
+</html>
