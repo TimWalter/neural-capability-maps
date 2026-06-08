@@ -157,7 +157,7 @@ def nn(index: Int64[Tensor, "*batch"]) -> Int64[Tensor, "*batch 6"]:
 @jaxtyped(typechecker=beartype)
 def random(num_samples: int) -> Float[Tensor, "num_samples 3"]:
     """
-    Sample random positions uniformly from R3.
+    Sample random positions uniformly from the unit-cube in R3.
 
     Args:
         num_samples: Number of samples to generate.
@@ -165,9 +165,7 @@ def random(num_samples: int) -> Float[Tensor, "num_samples 3"]:
     Returns:
         Random positions.
     """
-    translation = torch.randn(num_samples, 3)
-    translation /= torch.norm(translation, dim=1, keepdim=True)
-    translation *= torch.pow(torch.rand(num_samples, 1), 1.0 / 3)
+    translation = torch.rand(num_samples, 3) * 2 - 1.0
 
     return translation
 

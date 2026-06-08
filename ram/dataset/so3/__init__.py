@@ -90,7 +90,7 @@ def _generate_lookup(n_div: int, cells: Float[Tensor, "n_cells 3 3"]) -> Int64[T
 
 
 @jaxtyped(typechecker=beartype)
-def _generate_nn(cells: Float[Tensor, "n_cells 3 3"]) -> Float[Tensor, "n_cells 6"]:
+def _generate_nn(cells: Float[Tensor, "n_cells 3 3"]) -> Int64[Tensor, "n_cells 6"]:
     """
     Generate indices for nearest neighbours.
 
