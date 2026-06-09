@@ -923,3 +923,21 @@ a:focus {
   background-color: var(--background-primary) !important;
   transform: translateY(-2px);
 }
+
+
+.hero.teaser .hero-body {
+  display: flex;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.teaser-banner {
+  width: min(1000px, 100%);  /* increase from 900px */
+  padding: 0.5rem;             /* add breathing room inside the card */
+}
+
+.teaser-banner iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+}

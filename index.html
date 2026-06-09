@@ -166,7 +166,8 @@
                     </a>
                   </span>
                   <span class="link-block">
-                    <a id="dataset-email-btn" href="#" class="external-link button is-normal is-rounded is-dark">
+                    <a id="dataset-link-btn" href="https://app.globus.org/file-manager?origin_id=fcf7ca2e-cd91-45fb-8252-c53fe972e4d2&origin_path=%2Ftrain%2F" target="_blank"
+                      rel="noopener noreferrer" class="external-link button is-normal is-rounded is-dark">
                       <span class="icon">
                         <img src="static/images/lrz.png" alt="LRZ" style="height:1em; width:auto;" />
                       </span>
@@ -183,17 +184,18 @@
     </section>
 
     <!-- Teaser video-->
-    <section class="hero teaser">
-      <div class="container is-max-desktop">
-        <div class="hero-body">
-          <div class="publication-banner teaser-banner">
-            <video poster="" autoplay controls muted loop preload="metadata" playsinline>
-              <source src="static/videos/RAM_teaser.mp4" type="video/mp4">
-            </video>
-          </div>
-        </div>
-      </div>
-    </section>
+<section class="hero teaser">
+  <div class="hero-body">
+    <div class="publication-banner teaser-banner">
+      <iframe
+        src="https://www.youtube.com/embed/z9-zx4CzY8w"
+        frameborder="0"
+        allow="autoplay; encrypted-media; picture-in-picture"
+        allowfullscreen>
+      </iframe>
+    </div>
+  </div>
+</section>
     <!-- End teaser video -->
 
     <!-- Start tldr -->
@@ -311,7 +313,7 @@
     <!-- ═══════════════════════════════════════════════════════════
          DATASET
     ════════════════════════════════════════════════════════════ -->
-<section class="section hero">
+    <section class="section hero">
       <div class="container is-max-desktop">
         <h2 class="title is-3 has-text-centered">Dataset</h2>
 
@@ -376,7 +378,7 @@
         </div>
 
         <div class="dataset-carousel-container" style="margin-top: 1.5rem;">
-          
+
           <div class="dataset-slide is-active">
             <div class="pipeline-dual-image">
               <img src="static/images/MorphologyFigure.svg" alt="Example morphologies" style="padding: 1rem 1rem 0;" />
@@ -385,13 +387,16 @@
           </div>
 
           <div class="dataset-slide">
-            <div class="box" style="padding: 0; overflow: hidden; border: 1px solid var(--border-color); background: #fff;">
-              <img src="static/images/Poses.svg" alt="Sampled poses in the reachable region" style="width: 100%; display: block;" />
+            <div class="box"
+              style="padding: 0; overflow: hidden; border: 1px solid var(--border-color); background: #fff;">
+              <img src="static/images/Poses.svg" alt="Sampled poses in the reachable region"
+                style="width: 100%; display: block;" />
             </div>
           </div>
 
           <div class="dataset-slide">
-            <div class="box" style="padding: 0; overflow: hidden; border: 1px solid var(--border-color); background: #fff;">
+            <div class="box"
+              style="padding: 0; overflow: hidden; border: 1px solid var(--border-color); background: #fff;">
               <video id="dataset-video-label" muted loop playsinline controls width="100%" style="display: block;">
                 <source src="static/videos/Labels.mp4" type="video/mp4">
               </video>
@@ -415,8 +420,9 @@
         <h2 class="title is-3 has-text-centered">Results</h2>
 
         <!-- Workspace slice figure -->
-   <div class="content has-text-centered">
-          <img src="static/images/Slices.svg" alt="Workspace slice comparison" style="width: 100%; height: auto; display: block; margin: 0 auto;" />
+        <div class="content has-text-centered">
+          <img src="static/images/Slices.svg" alt="Workspace slice comparison"
+            style="width: 100%; height: auto; display: block; margin: 0 auto;" />
           <p class="has-text-justified" style="margin-top:1rem;">
             <strong>Workspace slices.</strong> A fixed-orientation cross-section through a representative workspace,
             showing ground-truth labels, RAM's prediction, and the GGIK baseline. RAM closely tracks the
