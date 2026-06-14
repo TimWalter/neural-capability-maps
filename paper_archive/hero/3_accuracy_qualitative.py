@@ -1,7 +1,6 @@
 import ram.dataset.se3 as se3
-import ram.dataset.r3 as r3
-from ram.dataset.workspace import ball_approximation
-from ram.dataset.kinematics import forward_kinematics, inverse_kinematics, transformation_matrix
+from ram.dataset.workspace import synthesise_data
+from ram.dataset.kinematics import forward_kinematics, inverse_kinematics
 from ram.dataset.self_collision import get_capsules, LINK_RADIUS
 from ram.model import Model
 from ram.dataset.morphology import sample_morph
@@ -19,18 +18,12 @@ import plotly.io as pio
 
 
 def plot_hero_accuracy(morph, name):
-    centre, radius = ball_approximation(morph[:-1])  # Ignore the EEF
-    radius = max(0.0, radius - r3.DISTANCE_BETWEEN_CELLS)  # Robust within discretisation
-    last_joint = se3.random_ball(100000, centre, radius/2).to(morph.device)
-
-    eef_transformation = transformation_matrix(morph[-1, 0:1], morph[-1, 1:2], morph[-1, 2:3],
-                                               torch.zeros_like(morph[-1, 0:1])).to(morph.device)
-    poses =  last_joint @ eef_transformation
-    joints, manipulability = inverse_kinematics(morph, poses)
-    labels = manipulability != -1
+    poses, labels = synthesise_data(morph, 100_000, return_poses=True, use_ik=True)
     predictions = model.predict(morph.unsqueeze(0).expand(poses.shape[0], -1, -1), se3.to_vector(poses)) > 0
 
-    s_all, e_all = get_capsules(morph, forward_kinematics(morph, joints[labels][0]))
+    print((labels == predictions).sum()/labels.shape[0])
+
+    s_all, e_all = get_capsules(morph, forward_kinematics(morph, inverse_kinematics(morph, poses[labels][0:1])[0][0]))
 
     palette = sns.color_palette("colorblind", 4)
     color_true = palette[2]
@@ -168,9 +161,10 @@ def plot_hero_accuracy(morph, name):
     fig.show()
 
 
-model = Model.from_id(141)
 
-torch.manual_seed(0)
+model = Model.from_id(142)
+
+torch.manual_seed(1)
 morph5 = sample_morph(1, 5, False)[0]
 morph6 = sample_morph(1, 6, False)[0]
 morph7 = sample_morph(1, 7, False)[0]

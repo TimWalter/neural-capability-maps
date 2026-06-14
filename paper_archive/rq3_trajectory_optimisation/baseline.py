@@ -73,31 +73,31 @@ def closure_fn(bmorph, offset, target_trajectory):
 
     return loss, (prediction_loss, deviation_loss, trajectory, reachability_score, pose_error, self_collision)
 
-closure = jax.value_and_grad(closure_fn, has_aux=True, argnums=1)
+closure = jax.jit(jax.vmap(jax.value_and_grad(closure_fn, has_aux=True, argnums=1), in_axes=(0, 0, 0)))
 
 
-
-def baseline(morph: Float[Tensor, "dofp1 3"], target_trajectory: Float[Tensor, "num_samples 4 4"], n_iter: int,
-         logging: bool = True) \
+def baseline(morph: Float[Tensor, "batch dofp1 3"], target_trajectory: Float[Tensor, "batch num_samples 4 4"], n_iter: int,
+             logging: bool = True) \
         -> tuple[
-            Float[Tensor, "n_iter"],
-            Float[Tensor, "n_iter"],
-            Float[Tensor, "n_iter"],
-            Bool[Tensor, "n_iter num_samples"],
-            Float[Tensor, "n_iter"],
-            Int[Tensor, "n_iter"],
+            Float[Tensor, "batch n_iter"],
+            Float[Tensor, "batch n_iter"],
+            Float[Tensor, "batch n_iter"],
+            Bool[Tensor, "batch n_iter num_samples"],
+            Float[Tensor, "batch n_iter"],
+            Int[Tensor, "batch n_iter"],
             Tensor
         ]:
 
     jax_morph = jax.dlpack.from_dlpack(morph)
-    jax_bmorph = jax.lax.broadcast(jax_morph, target_trajectory.shape[0:1])
     jax_target_trajectory = jax.dlpack.from_dlpack(target_trajectory)
+    jax_bmorph = jax.vmap(lambda m, traj: jax.lax.broadcast(m, traj.shape[0:1]))(jax_morph, jax_target_trajectory)
 
-    offset = jnp.zeros((target_trajectory.shape[0], 6), device=jax_morph.device)
+
+    offset = jnp.zeros((target_trajectory.shape[0], target_trajectory.shape[1], 6), dtype=jax_morph.dtype)
 
     optimizer = optax.adamw(learning_rate=0.001)
 
-    opt_state = optimizer.init(offset)
+    opt_state = jax.vmap(optimizer.init)(offset)
 
     loss_list = []
     prediction_loss_list = []
@@ -105,28 +105,49 @@ def baseline(morph: Float[Tensor, "dofp1 3"], target_trajectory: Float[Tensor, "
     reachability = []
     pose_error_list = []
     self_collision_list = []
+    # Batched adam optimization step using JAX
+    @jax.jit
+    def step(bmorph, offset, target_traj, opt_state):
+        (loss, (pred_loss, dev_loss, traj, reach_score, pose_err, self_coll)), grads = closure(bmorph, offset, target_traj)
 
-    for i in tqdm(range(n_iter)):
-        (loss, (prediction_loss, deviation_loss, trajectory,reachability_score, pose_error, self_collision)), grads = closure(jax_bmorph, offset, jax_target_trajectory)
+        # Vectorize optimizer updates across the batch dimension cleanly
+        updates, opt_state = jax.vmap(optimizer.update)(grads, opt_state, offset)
+        offset = jax.vmap(optax.apply_updates)(offset, updates)
 
-        updates, opt_state = optimizer.update(grads, opt_state, offset)
-        offset = optax.apply_updates(offset, updates)
+        return loss, pred_loss, dev_loss, traj, reach_score, pose_err, self_coll, offset, opt_state
+
+    for i in tqdm(range(n_iter), desc="Optimizing Baseline"):
+        loss, prediction_loss, deviation_loss, trajectory, reachability_score, pose_error, self_collision, offset, opt_state = step(
+            jax_bmorph, offset, jax_target_trajectory, opt_state
+        )
 
         # Logging
         if logging:
             with torch.no_grad():
-                loss_list += [loss.item()]
-                prediction_loss_list += [prediction_loss_c * prediction_loss.item()]
-                deviation_loss_list += [deviation_loss_c * deviation_loss.item()]
-                reachability += [torch.from_dlpack(jax.lax.stop_gradient(reachability_score)).cpu() == 0.0]
-                pose_error_list += [pose_error.item()]
-                self_collision_list += [self_collision.item()]
-    return (torch.tensor(loss_list),
-            torch.tensor(prediction_loss_list),
-            torch.tensor(deviation_loss_list),
-            torch.stack(reachability, dim=0) if logging else None,
-            torch.tensor(pose_error_list),
-            torch.tensor(self_collision_list),
+                loss_list += [torch.from_dlpack(jax.lax.stop_gradient(loss))]
+                prediction_loss_list += [prediction_loss_c * torch.from_dlpack(jax.lax.stop_gradient(prediction_loss))]
+                deviation_loss_list += [deviation_loss_c * torch.from_dlpack(jax.lax.stop_gradient(deviation_loss))]
+                reachability += [torch.from_dlpack(jax.lax.stop_gradient(reachability_score)) == 0.0]
+                pose_error_list += [torch.from_dlpack(jax.lax.stop_gradient(pose_error))]
+                self_collision_list += [torch.from_dlpack(jax.lax.stop_gradient(self_collision))]
+
+    # Stack logs over iterations: output dimensions will be [batch, n_iter, ...]
+    if logging:
+        loss_tensor = torch.stack(loss_list, dim=1)
+        pred_loss_tensor = torch.stack(prediction_loss_list, dim=1)
+        dev_loss_tensor = torch.stack(deviation_loss_list, dim=1)
+        reach_tensor = torch.stack(reachability, dim=1)
+        pose_err_tensor = torch.stack(pose_error_list, dim=1)
+        self_coll_tensor = torch.stack(self_collision_list, dim=1)
+    else:
+        loss_tensor = pred_loss_tensor = dev_loss_tensor = reach_tensor = pose_err_tensor = self_coll_tensor = None
+
+    return (loss_tensor,
+            pred_loss_tensor,
+            dev_loss_tensor,
+            reach_tensor,
+            pose_err_tensor,
+            self_coll_tensor,
             torch.from_dlpack(jax.lax.stop_gradient(trajectory)).cpu())
 
 
@@ -148,14 +169,9 @@ if __name__ == "__main__":
 
     device = torch.device("cuda")
 
-    loss_list = []
-    prediction_loss_list = []
-    deviation_loss_list = []
-    reachability_list = []
-    pose_error_list = []
-    self_collision_list = []
+    all_morphs = []
+    all_trajectories = []
 
-    last_reachability = None
     for s in range(100):
         torch.manual_seed(s)
         morph = sample_morph(1, 6, False, device)[0]
@@ -169,29 +185,38 @@ if __name__ == "__main__":
         t = torch.linspace(0, 1, num_samples, device=tangent.device).view(-1, 1)
         target_trajectory = se3.exp(start.repeat(num_samples, 1, 1), t * tangent)
 
-        loss, prediction_loss, deviation_loss, reachability, pose_error, self_collision, trajectory = baseline(morph,
-                                                                                                target_trajectory, 100)
-        loss_list += [loss]
-        prediction_loss_list += [prediction_loss]
-        deviation_loss_list += [deviation_loss]
-        reachability_list += [reachability.sum(dim=1)]
-        pose_error_list += [pose_error]
-        self_collision_list += [self_collision]
+        all_morphs.append(morph)
+        all_trajectories.append(target_trajectory)
 
-        last_reachability = reachability[-1]
+    # Batch everything along dimension 0
+    batched_morphs = torch.stack(all_morphs)
+    batched_trajectories = torch.stack(all_trajectories)
 
-        if s == 0:
-            pickle.dump(morph, open(save_dir / "morph.pkl", "wb"))
-            pickle.dump(target_trajectory, open(save_dir / "target_trajectory.pkl", "wb"))
-            pickle.dump(trajectory, open(save_dir / "trajectory.pkl", "wb"))
-            pickle.dump(last_reachability, open(save_dir / "last_reachability.pkl", "wb"))
+    # Runs optimization for all 100 trajectories fully in parallel via JAX vmap
+    loss, prediction_loss, deviation_loss, reachability, pose_error, self_collision, trajectory = baseline(
+        batched_morphs, batched_trajectories, 100
+    )
+
+    loss_list = [loss[i] for i in range(100)]
+    prediction_loss_list = [prediction_loss[i] for i in range(100)]
+    deviation_loss_list = [deviation_loss[i] for i in range(100)]
+    reachability_list = [reachability[i].sum(dim=1) for i in range(100)]
+    pose_error_list = [pose_error[i] for i in range(100)]
+    self_collision_list = [self_collision[i] for i in range(100)]
+
+    last_reachability = reachability[-1, -1]
+
+    pickle.dump(batched_morphs[0], open(save_dir / "morph.pkl", "wb"))
+    pickle.dump(batched_trajectories[0], open(save_dir / "target_trajectory.pkl", "wb"))
+    pickle.dump(trajectory[0], open(save_dir / "trajectory.pkl", "wb"))
+    pickle.dump(last_reachability, open(save_dir / "last_reachability.pkl", "wb"))
 
     loss = bootstrap_mean_ci(torch.stack(loss_list))
     prediction_loss = bootstrap_mean_ci(torch.stack(prediction_loss_list))
     deviation_loss = bootstrap_mean_ci(torch.stack(deviation_loss_list))
-    reachability = bootstrap_mean_ci(torch.stack(reachability_list))
+    reachability = bootstrap_mean_ci(torch.stack(reachability_list).float())
     pose_error = bootstrap_mean_ci(torch.stack(pose_error_list))
-    self_collision = bootstrap_mean_ci(torch.stack(self_collision_list))
+    self_collision = bootstrap_mean_ci(torch.stack(self_collision_list).float())
 
     pickle.dump(loss, open(save_dir / "loss.pkl", "wb"))
     pickle.dump(prediction_loss, open(save_dir / "prediction_loss.pkl", "wb"))
@@ -200,49 +225,49 @@ if __name__ == "__main__":
     pickle.dump(pose_error, open(save_dir / "pose_error.pkl", "wb"))
     pickle.dump(self_collision, open(save_dir / "self_collision.pkl", "wb"))
 
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
-    sns.set_style("ticks")
-    plt.rcParams.update({
-        "text.usetex": True,
-        "font.family": "serif",
-        "pgf.rcfonts": False,
-        "text.latex.preamble": r"\usepackage{amsmath}",
-
-        "axes.labelsize": 34,
-        "xtick.labelsize": 34,
-        "ytick.labelsize": 34,
-        "legend.fontsize": 34,
-        "axes.titlesize": 34,
-        "lines.linewidth": 3,
-    })
-
-    fig, ax = plt.subplots(2, 1, figsize=(15, 20))
-    colors = sns.color_palette("colorblind", 3)
-
-    ln1 = ax[0].plot(reachability[0], color=colors[0], label="Reachability")
-    ln2 = ax[0].plot(self_collision[0], color=colors[1], label=r"\# Self Collision")
-    ax02 = ax[0].twinx()
-    ln3 = ax02.plot(pose_error[0], color=colors[2], label="Pose Error")
-
-    ax[0].set_ylim(0.0, num_samples)
-    ax[0].set_ylabel("Counts")
-    ax02.set_ylabel("Error Value")
-    lines = ln1 + ln2 + ln3
-    labels = [l.get_label() for l in lines]
-    ax[0].legend(lines, labels, loc='upper right')
-
-    ax[1].plot(loss[0], label="Loss", alpha=0.7)
-    ax[1].plot(prediction_loss[0], label="Reachability Loss", alpha=0.7)
-    ax[1].plot(deviation_loss[0], label="Deviation Loss", alpha=0.7)
-    ax[1].legend()
-
-    for i in range(len(ax)):
-        ax[i].grid(True, linestyle='--', alpha=0.6)
-
-    plt.tight_layout()
-    plt.show()
+    # import matplotlib.pyplot as plt
+    # import seaborn as sns
+    #
+    # sns.set_style("ticks")
+    # plt.rcParams.update({
+    #     "text.usetex": True,
+    #     "font.family": "serif",
+    #     "pgf.rcfonts": False,
+    #     "text.latex.preamble": r"\usepackage{amsmath}",
+    #
+    #     "axes.labelsize": 34,
+    #     "xtick.labelsize": 34,
+    #     "ytick.labelsize": 34,
+    #     "legend.fontsize": 34,
+    #     "axes.titlesize": 34,
+    #     "lines.linewidth": 3,
+    # })
+    #
+    # fig, ax = plt.subplots(2, 1, figsize=(15, 20))
+    # colors = sns.color_palette("colorblind", 3)
+    #
+    # ln1 = ax[0].plot(reachability[0], color=colors[0], label="Reachability")
+    # ln2 = ax[0].plot(self_collision[0], color=colors[1], label=r"\# Self Collision")
+    # ax02 = ax[0].twinx()
+    # ln3 = ax02.plot(pose_error[0], color=colors[2], label="Pose Error")
+    #
+    # ax[0].set_ylim(0.0, num_samples)
+    # ax[0].set_ylabel("Counts")
+    # ax02.set_ylabel("Error Value")
+    # lines = ln1 + ln2 + ln3
+    # labels = [l.get_label() for l in lines]
+    # ax[0].legend(lines, labels, loc='upper right')
+    #
+    # ax[1].plot(loss[0], label="Loss", alpha=0.7)
+    # ax[1].plot(prediction_loss[0], label="Reachability Loss", alpha=0.7)
+    # ax[1].plot(deviation_loss[0], label="Deviation Loss", alpha=0.7)
+    # ax[1].legend()
+    #
+    # for i in range(len(ax)):
+    #     ax[i].grid(True, linestyle='--', alpha=0.6)
+    #
+    # plt.tight_layout()
+    # plt.show()
     #
     #
     # visualise_trajectories(morph.cpu(), [target_trajectory.cpu(), trajectory.cpu()],

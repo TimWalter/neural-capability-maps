@@ -1,5 +1,11 @@
 import torch
+import pickle
+from pathlib import Path
+from plotly.subplots import make_subplots
 
+from paper_archive.utils import bootstrap_mean_ci, visualise_workspace
+from ram.dataset.morphology import sample_morph
+import ram.dataset.se3 as se3
 from tqdm import tqdm
 from torch import Tensor
 from jaxtyping import Float, Int, Bool
@@ -121,13 +127,7 @@ def ours(initial_morph: Float[Tensor, "dofp1 3"], task: Float[Tensor, "num_sampl
 
 
 if __name__ == "__main__":
-    import pickle
-    from pathlib import Path
-    from plotly.subplots import make_subplots
 
-    from paper_archive.utils import bootstrap_mean_ci, visualise_workspace
-    from ram.dataset.morphology import sample_morph
-    import ram.dataset.se3 as se3
 
     torch.manual_seed(0)
 
@@ -174,9 +174,9 @@ if __name__ == "__main__":
     loss = bootstrap_mean_ci(torch.stack(loss_list))
     pose_loss = bootstrap_mean_ci(torch.stack(pose_loss_list))
     self_collision_loss = bootstrap_mean_ci(torch.stack(self_collision_loss_list))
-    reachability = bootstrap_mean_ci(torch.stack(reachability_list))
+    reachability = bootstrap_mean_ci(torch.stack(reachability_list).float())
     pose_error = bootstrap_mean_ci(torch.stack(pose_error_list))
-    self_collision = bootstrap_mean_ci(torch.stack(self_collision_list))
+    self_collision = bootstrap_mean_ci(torch.stack(self_collision_list).float())
 
     pickle.dump(loss, open(save_dir / "loss.pkl", "wb"))
     pickle.dump(pose_loss, open(save_dir / "pose_loss.pkl", "wb"))
