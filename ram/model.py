@@ -77,6 +77,8 @@ class Model(nn.Module):
         Returns:
             Reachability logit.
         """
+        lengths = (morph != 0).any(dim=-1).sum(dim=-1).cpu()
+        morph = torch.nn.utils.rnn.pack_padded_sequence(morph, lengths=lengths, batch_first=True, enforce_sorted=False)
         latent = self.encoder(morph)[1][0][-1]
         logit = self.decoder(torch.cat([pose, latent], dim=-1)).squeeze(-1)
         return logit

@@ -38,8 +38,9 @@ class Dataset:
             if (match := re.search(r'^(\d+)_samples$', k))
         ])
         self.morphologies = [torch.from_numpy(self.root[f"{idx}_morphologies"][:]) for idx in file_indices]
-        max_dof = max([morph.shape[1] for morph in self.morphologies])
-        self.morphologies = [torch.cat([m, torch.zeros(m.shape[0], max_dof - m.shape[1], 3)], dim=1) for m in
+        self.dofs = [morph.shape[1] for morph in self.morphologies]
+        self.max_dof = max(self.dofs)
+        self.morphologies = [torch.cat([m, torch.zeros(m.shape[0], self.max_dof - m.shape[1], 3)], dim=1) for m in
                              self.morphologies]
         self.morphologies = torch.cat(self.morphologies, dim=0)
 
@@ -126,7 +127,7 @@ class Dataset:
 
     @jaxtyped(typechecker=beartype)
     def __getitem__(self, batch_idx: int) -> tuple[
-        Float[Tensor, "batch dof 3"],
+        Float[Tensor, "batch {self.max_dof} 3"],
         Float[Tensor, "batch 9"],
         Bool[Tensor, "batch"]
     ]:
@@ -160,7 +161,7 @@ class Dataset:
 
     @jaxtyped(typechecker=beartype)
     def get_random_batch(self) -> tuple[
-        Float[Tensor, "batch dof 3"],
+        Float[Tensor, "batch {self.max_dof} 3"],
         Float[Tensor, "batch 9"],
         Bool[Tensor, "batch"]
     ]:
@@ -175,7 +176,7 @@ class Dataset:
 
     @jaxtyped(typechecker=beartype)
     def get_semi_random_batch(self) -> tuple[
-        Float[Tensor, "batch dof 3"],
+        Float[Tensor, "batch {self.max_dof} 3"],
         Float[Tensor, "batch 9"],
         Bool[Tensor, "batch"]
     ]:

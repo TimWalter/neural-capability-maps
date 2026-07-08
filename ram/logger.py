@@ -118,7 +118,7 @@ class Logger:
             logit: Predicted logits.
             loss: Loss on the batch.
         """
-        data = {"Loss": loss / self.training_set.batch_size,
+        data = {"Loss": loss,
                 "Reachable [%]": label.sum().item() / label.shape[0] * 100}
         data |= self.compute_metrics(logit, label)
         data = self.assign_space(data, "Training")
@@ -126,27 +126,6 @@ class Logger:
         self.step = epoch * len(self.training_set) + batch_idx
         self.run.log(data=data, step=self.step, commit=True)
 
-    @jaxtyped(typechecker=beartype)
-    def log_intermediate_validation(self,
-                                    label: Bool[Tensor, "batch"],
-                                    logit: Float[Tensor, "batch"],
-                                    loss: Float[Tensor, ""]
-                                    ):
-        """
-        Create the log of an intermediate validation step and post it to W&B.
-
-        Args:
-            label: Reachability labels.
-            logit: Predicted logits.
-            loss: Loss on the batch.
-        """
-
-        data = {"Loss": loss / self.validation_set.batch_size,
-                "Reachable [%]": label.sum().item() / label.shape[0] * 100}
-        data |= self.compute_metrics(logit, label)
-        data = self.assign_space(data, "Intermediate Validation")
-
-        self.run.log(data=data, step=self.step + 1, commit=False)
 
     @jaxtyped(typechecker=beartype)
     def log_validation(self,
@@ -175,7 +154,7 @@ class Logger:
         active_set = self.boundary_set if boundary else self.validation_set
         self.buffer["morph_index"] += [active_set._get_batch(batch_idx)[:, 0].long().cpu()]
         if batch_idx + 1 == len(active_set):
-            data = {"Loss": self.buffer["loss"] / len(active_set) / active_set.batch_size}
+            data = {"Loss": self.buffer["loss"] / len(active_set)}
             data |= self.compute_metrics(torch.cat(self.buffer["logit"]),
                                          torch.cat(self.buffer["label"]),
                                          torch.cat(self.buffer["morph_index"]))
