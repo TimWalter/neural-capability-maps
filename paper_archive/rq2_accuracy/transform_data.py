@@ -20,7 +20,9 @@ for path in ["test", "test_boundary"]:
     graphs = []
     struct_data = []
     for morph_idx in tqdm(range(len(eval_set.morphologies)), "To graph"):
-        morph = eval_set._get_morph(torch.tensor([morph_idx]))[0]
+        morph = eval_set.morphologies[morph_idx]
+        dofp1 = (morph.abs().sum(dim=1) != 0).sum().item()
+        morph = morph[:dofp1]
 
         params = {
             "alpha": morph[:, 0].tolist(),
@@ -41,37 +43,30 @@ for path in ["test", "test_boundary"]:
 
     data = []
     label_buffer = []
-    if path == "test":
 
-        morph_indices = []
-        pose_buffer = []
-        morph_count = torch.zeros(len(graphs), dtype=torch.int)
+    morph_indices = []
+    pose_buffer = []
+    morph_count = torch.zeros(len(graphs), dtype=torch.int)
 
-        eval_set = ValidationSet(1000, False, path)
-        for batch_idx, (morph, pose, label) in enumerate(tqdm(eval_set, desc=path)):
-            morph_idx = eval_set._get_batch(batch_idx)[:, 0].long()
+    eval_set = ValidationSet(1000, False, path)
+    for batch_idx, (morph, pose, label) in enumerate(tqdm(eval_set, desc=path)):
+        morph_idx = eval_set._get_batch(batch_idx)[:, 0].long()
 
-            for inner_idx, (mi, p, l) in enumerate(zip(morph_idx, pose, label)):
-                if morph_count[mi] >= 1000:
-                    continue
-                morph_indices += [mi]
-                data += [generate_data_point_from_pose(graphs[mi],
-                                                       SE3.from_matrix(se3.from_vector(p).numpy(), normalize=True),
-                                                       struct_data[mi])]
-                pose_buffer += [p]
-                label_buffer += [l]
-                morph_count[mi] += 1
+        for inner_idx, (mi, p, l) in enumerate(zip(morph_idx, pose, label)):
+            if morph_count[mi] >= 1000:
+                continue
+            morph_indices += [mi]
+            data += [generate_data_point_from_pose(graphs[mi],
+                                                   SE3.from_matrix(se3.from_vector(p).numpy(), normalize=True),
+                                                   struct_data[mi])]
+            pose_buffer += [p]
+            label_buffer += [l]
+            morph_count[mi] += 1
 
-        torch.save(torch.tensor(morph_indices), directory / "morph_indices.pth")
-        torch.save(torch.stack(pose_buffer), directory / "poses.pth")
+    torch.save(torch.tensor(morph_indices), directory / "morph_indices.pth")
+    torch.save(torch.stack(pose_buffer), directory / "poses.pth")
 
-    else:
-        for batch_idx, (morph, pose, label) in enumerate(tqdm(eval_set, desc=path)):
-            morph_idx = eval_set._get_batch(batch_idx)[0, 0].long()
-            label_buffer += [label]
-            data += [generate_data_point_from_pose(graphs[morph_idx],
-                                                   SE3.from_matrix(se3.from_vector(pose[0]).numpy(), normalize=True),
-                                                   struct_data[morph_idx])]
+
 
     torch.save(torch.tensor(label_buffer), directory / "labels.pth")
     pickle.dump(data, open(directory / "data.pickle", "wb"))

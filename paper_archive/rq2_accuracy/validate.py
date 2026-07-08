@@ -13,30 +13,12 @@ def evaluate_ggik_split(path_name: str):
     se3_dist = torch.load(directory / "se3_dist.pth")
     labels = torch.load(directory/ "labels.pth")
 
-    if path_name == "test_boundary":
-        morph_indices = []
-        mask5 = []
-        mask6 = []
-        mask7 = []
-
-        eval_set = ValidationSet(1000, False, path_name)
-        for batch_idx, (morph, pose, label) in enumerate(tqdm(eval_set, desc=path_name)):
-            morph_indices += [eval_set._get_batch(batch_idx)[:, 0].long()]
-            mask5 += [(morph.abs().sum(dim=2) != 0).sum(dim=1) == 6]
-            mask6 += [(morph.abs().sum(dim=2) != 0).sum(dim=1) == 7]
-            mask7 += [(morph.abs().sum(dim=2) != 0).sum(dim=1) == 8]
-
-        morph_indices = torch.cat(morph_indices)
-        mask5 = torch.cat(mask5)
-        mask6 = torch.cat(mask6)
-        mask7 = torch.cat(mask7)
-    else:
-        morph_indices = torch.load(directory / "morph_indices.pth")
-        ones = torch.ones(100* 1000, dtype=torch.bool)
-        zeros = torch.zeros(100* 1000, dtype=torch.bool)
-        mask5 = torch.cat([ones, zeros, zeros])
-        mask6 = torch.cat([zeros, ones, zeros])
-        mask7 = torch.cat([zeros, zeros, ones])
+    morph_indices = torch.load(directory / "morph_indices.pth")
+    ones = torch.ones(100* 1000, dtype=torch.bool)
+    zeros = torch.zeros(100* 1000, dtype=torch.bool)
+    mask5 = torch.cat([ones, zeros, zeros])
+    mask6 = torch.cat([zeros, ones, zeros])
+    mask7 = torch.cat([zeros, zeros, ones])
 
     # Optimize the distance threshold using the grid search logic
     min_unreachable_distance = se3_dist[~labels].min()
