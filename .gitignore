@@ -20,3 +20,5 @@ trace.json
 *.pickle
 *.pdf
 *.png
+*.usd
+*.mov

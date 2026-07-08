@@ -72,6 +72,7 @@ def ours(morph: Float[Tensor, "dofp1 3"], target_trajectory: Float[Tensor, "num_
     reachability = []
     pose_error_list = []
     self_collision_list = []
+    trajectories = []
 
     model = Model.from_id(142).to(morph.device)
 
@@ -113,13 +114,14 @@ def ours(morph: Float[Tensor, "dofp1 3"], target_trajectory: Float[Tensor, "num_
                 reachability += [reachability_score.cpu() == 0.0]
                 pose_error_list += [dists.mean().item()]
                 self_collision_list += [(critical_distance < 0.0).sum().item()]
+                trajectories += [trajectory.detach().clone().cpu()]
     return (torch.tensor(loss_list),
             torch.tensor(prediction_loss_list),
             torch.tensor(deviation_loss_list),
             torch.stack(reachability, dim=0) if logging else None,
             torch.tensor(pose_error_list),
             torch.tensor(self_collision_list),
-            trajectory.cpu().detach())
+            torch.stack(trajectories, dim=0))
 
 
 if __name__ == "__main__":
@@ -181,9 +183,9 @@ if __name__ == "__main__":
     loss = bootstrap_mean_ci(torch.stack(loss_list))
     prediction_loss = bootstrap_mean_ci(torch.stack(prediction_loss_list))
     deviation_loss = bootstrap_mean_ci(torch.stack(deviation_loss_list))
-    reachability = bootstrap_mean_ci(torch.stack(reachability_list))
+    reachability = bootstrap_mean_ci(torch.stack(reachability_list).float())
     pose_error = bootstrap_mean_ci(torch.stack(pose_error_list))
-    self_collision = bootstrap_mean_ci(torch.stack(self_collision_list))
+    self_collision = bootstrap_mean_ci(torch.stack(self_collision_list).float())
 
     pickle.dump(loss, open(save_dir / "loss.pkl", "wb"))
     pickle.dump(prediction_loss, open(save_dir / "prediction_loss.pkl", "wb"))

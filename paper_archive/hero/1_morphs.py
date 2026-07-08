@@ -12,7 +12,7 @@ import numpy as np
 from tqdm import tqdm
 
 torch.manual_seed(0)
-morph = sample_morph(1600, 6, False,device=torch.device("cuda"))
+morph = sample_morph(100, 6, False,device=torch.device("cuda"))
 poses = forward_kinematics(morph, torch.zeros(morph.shape[0], 7, 1, device=morph.device))
 
 COLOR_JOINT = (0.2, 0.2, 0.2)  # Dark Grey for motors

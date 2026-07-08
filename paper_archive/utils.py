@@ -15,6 +15,8 @@ from ram.dataset.workspace import ball_approximation
 from ram.dataset.self_collision import get_capsules, LINK_RADIUS
 from ram.dataset.kinematics import forward_kinematics, transformation_matrix
 
+import newton
+import warp as wp
 
 @jaxtyped(typechecker=beartype)
 def bootstrap_mean_ci(trajectories: Float[Tensor, "n_trajectories n_timepoints"], n_bootstraps: int = 1000,

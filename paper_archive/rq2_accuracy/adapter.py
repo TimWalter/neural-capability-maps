@@ -9,6 +9,15 @@ from paper_archive.rq2_accuracy.generative_graphik.generative_graphik.args.utils
 import ram.dataset.se3 as se3
 from ram.dataset.kinematics import forward_kinematics
 from ram.dataset.self_collision import collision_check
+import concurrent.futures
+
+# Ensure child processes are safely spawned for PyTorch compatibility
+import multiprocessing
+try:
+    multiprocessing.set_start_method('spawn')
+except RuntimeError:
+    pass  # Already set elsewhere
+
 
 def network_args():
     parser = argparse.ArgumentParser()
@@ -60,15 +69,23 @@ def network_args():
     args = parser.parse_args(args=[])
     return args
 
+def _process_single_graph(output_slice, current_graph, current_pose, dofp1, num_samples, num_nodes):
+    """Worker function to process joints for a single robot graph on CPU."""
+    T_final = {f"p{dofp1}": SE3.from_matrix(current_pose, normalize=True)}
+    joint_list = []
+    idx = 0
+    for s in range(num_samples):
+        current_output = output_slice[s, :num_nodes]
+        g_pos = graph_from_pos(current_output, current_graph.node_ids)
+        joint_list += [torch.tensor(list(current_graph.joint_variables(g_pos, T_final=T_final).values()))]
+    return torch.stack(joint_list, dim=0)
+
 
 def forward_pose(model, data, num_samples, morph, pose, morph_idx, graph):
-    batch_size, dofp1 = morph.shape[:2]
-
+    batch_size = morph.shape[0]
     data = [model.preprocess(d) for d in data]
     batch = Batch.from_data_list(data).to(morph.device)
     total_nodes_in_batch = batch.num_nodes
-    nodes_per_robot = data[0].num_nodes
-
     output = model.forward_eval(
         x=batch.pos,
         h=torch.cat((batch.type, batch.goal_data_repeated_per_node), dim=-1),
@@ -79,28 +96,72 @@ def forward_pose(model, data, num_samples, morph, pose, morph_idx, graph):
         nodes_per_single_graph=total_nodes_in_batch,
         batch_size=1,  # Treated as 1 large graph for the sample expansion logic
         num_samples=num_samples
-    ).reshape(num_samples, batch_size, nodes_per_robot, 3)
+    )#.reshape(num_samples, batch_size, nodes_per_robot, 3)
+    ###
+    output_cpu = output.cpu()
+    pose_cpu = pose.cpu().numpy()
 
-    joint_list = []
-    for s in range(num_samples):
-        for b in range(batch_size):
-            current_output = output[s, b]
-            current_graph = graph[morph_idx[b]]
-            current_pose = pose[b]
+    tasks = []
+    idx = 0
+    for b in range(batch_size):
+        current_graph = graph[morph_idx[b]]
+        current_pose = pose_cpu[b]
+        dofp1 = (morph[b].abs().sum(dim=1) != 0).sum().item()
 
-            g_pos = graph_from_pos(current_output.cpu(), current_graph.node_ids)
-            T_final = {f"p{dofp1}": SE3.from_matrix(current_pose.cpu().numpy(), normalize=True)}
-            joint_list += [torch.tensor(list(current_graph.joint_variables(g_pos, T_final=T_final).values()))]
-    joints = torch.stack(joint_list, dim=0).unsqueeze(-1)
-    joints = torch.cat([joints[:, 1:], torch.zeros_like(joints[:, 0:1])], dim=1).float().to(morph.device)
-    joints = joints.reshape(num_samples, batch_size, dofp1, 1)
+        # Slice output for current graph
+        output_slice = output_cpu[:, idx:idx+data[b].num_nodes]
+        idx += data[b].num_nodes
 
-    predicted_pose = forward_kinematics(morph.unsqueeze(0).expand(num_samples, -1, -1, -1), joints)
-    # Pick best sample
-    collision = collision_check(morph.unsqueeze(0).expand(num_samples, -1, -1, -1), predicted_pose)
-    distance = se3.distance(predicted_pose[:, :, -1], pose.unsqueeze(0).expand(num_samples, -1, -1, -1))
-    distance[collision] = torch.inf
-    min_idx = distance.argmin(dim=0)
-    predicted_pose = predicted_pose[min_idx[:, 0], torch.arange(batch_size)]
+        tasks.append((output_slice, current_graph, current_pose, dofp1, num_samples, data[b].num_nodes))
 
-    return predicted_pose
+    # Multi-process execution over available CPU cores
+    batch_joints = []
+    with concurrent.futures.ProcessPoolExecutor(max_workers=100) as executor:
+        futures = [executor.submit(_process_single_graph, *t) for t in tasks]
+        for f in futures:
+            batch_joints.append(f.result())
+
+    # Fast Vectorized GPU operations for Kinematics & Collisions
+    pose_list = []
+    for b in range(batch_size):
+        dofp1 = (morph[b].abs().sum(dim=1) != 0).sum().item()
+        current_morph = morph[b][:dofp1].unsqueeze(0).expand(num_samples, -1, -1)
+        current_pose = pose[b]
+
+        joints = batch_joints[b].unsqueeze(-1)
+        joints = torch.cat([joints[:, 1:], torch.zeros_like(joints[:, 0:1])], dim=1).float().to(morph.device)
+        joints = joints.reshape(num_samples, dofp1, 1)
+
+        predicted_pose = forward_kinematics(current_morph, joints)
+        collision = collision_check(current_morph, predicted_pose)
+        distance = se3.distance(predicted_pose[:, -1], current_pose.unsqueeze(0).expand(num_samples, -1, -1))
+        distance[collision] = torch.inf
+        min_idx = distance.argmin(dim=0)
+        pose_list += predicted_pose[min_idx, -1]
+    ###
+    # pose_list = []
+    # idx = 0
+    # for b in range(batch_size):
+    #     current_graph = graph[morph_idx[b]]
+    #     current_pose = pose[b]
+    #     dofp1 = (morph[b].abs().sum(dim=1) != 0).sum().item()
+    #     current_morph = morph[b][:dofp1].unsqueeze(0).expand(num_samples, -1, -1)
+    #     T_final = {f"p{dofp1}": SE3.from_matrix(current_pose.cpu().numpy(), normalize=True)}
+    #     joint_list = []
+    #     for s in range(num_samples):
+    #         current_output = output[s, idx:idx+data[b].num_nodes]
+    #         g_pos = graph_from_pos(current_output.cpu(), current_graph.node_ids)
+    #         joint_list += [torch.tensor(list(current_graph.joint_variables(g_pos, T_final=T_final).values()))]
+    #
+    #     idx += data[b].num_nodes
+    #     joints = torch.stack(joint_list, dim=0).unsqueeze(-1)
+    #     joints = torch.cat([joints[:, 1:], torch.zeros_like(joints[:, 0:1])], dim=1).float().to(morph.device)
+    #     joints = joints.reshape(num_samples, dofp1, 1)
+    #     predicted_pose = forward_kinematics(current_morph, joints)
+    #     collision = collision_check(current_morph, predicted_pose)
+    #     distance = se3.distance(predicted_pose[:, -1], current_pose.unsqueeze(0).expand(num_samples, -1, -1))
+    #     distance[collision] = torch.inf
+    #     min_idx = distance.argmin(dim=0)
+    #     pose_list += predicted_pose[min_idx, -1]
+
+    return torch.stack(pose_list)
