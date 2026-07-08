@@ -25,7 +25,7 @@ class Model(nn.Module):
             model: Instantiated model.
         """
 
-        model_dir = Path(__file__).parent.parent / "trained_models"
+        model_dir = Path(__file__).parent.parent / "data" / "trained_models"
         pattern = rf"{model_id}-[a-z]+-[a-z]+"
         folder = next((f for f in model_dir.iterdir() if re.match(pattern, f.name)), None)
         metadata_path = model_dir / folder / 'metadata.json'

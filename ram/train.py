@@ -22,10 +22,10 @@ def main(epochs: int,
     validation_set = ValidationSet(batch_size, False)
     boundary_set = ValidationSet(batch_size, False, validation_set.path + "_boundary")
 
-    model = Model(**hyperparameter).to(device)
+    model = Model(**hyperparameter)
     if pretrain != -1:
-        model.from_id(pretrain)
-
+        model = model.from_id(pretrain)
+    model = model.to(device)
     loss_function = torch.nn.BCEWithLogitsLoss(reduction='mean')
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 

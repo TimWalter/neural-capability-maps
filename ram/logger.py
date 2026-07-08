@@ -54,7 +54,7 @@ class Logger:
         self.run = self.setup_wandb(trial, metadata)
 
         parts = self.run.name.split("-")
-        self.folder = Path(__file__).parent.parent / "trained_models" / f"{parts[-1]}-{'-'.join(parts[:-1])}"
+        self.folder = Path(__file__).parent.parent / "data" / "trained_models" / f"{parts[-1]}-{'-'.join(parts[:-1])}"
         Path(self.folder).mkdir(parents=True, exist_ok=True)
         json.dump(metadata, open(self.folder / 'metadata.json', 'w'), indent=4)
 
@@ -75,7 +75,7 @@ class Logger:
             Weights & Biases run
         """
         # wandb.login(key="")
-        run = wandb.init(project="RAM", config=metadata, dir=Path(__file__).parent.parent / "wandb")
+        run = wandb.init(project="RAM", config=metadata, dir=Path(__file__).parent.parent / "data" /"wandb")
         if trial is not None:
             run.name = f"trial/{trial.number}/{run.name}"
 
