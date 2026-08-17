@@ -208,7 +208,7 @@ def cell_noisy(index: Int64[Tensor, "*batch"]) -> Float[Tensor, "*batch 3 3"]:
     tangent_noise = torch.rand_like(orientation[..., :, 0]) - 0.5
     tangent_noise /= tangent_noise.norm(dim=-1, keepdim=True)
     # * 0.9 to respect the lookup imprecision
-    tangent_noise *= MIN_DISTANCE_BETWEEN_CELLS / 2 * torch.rand(index.shape[0], 1) * 0.65
+    tangent_noise *= MIN_DISTANCE_BETWEEN_CELLS / 2 * torch.rand(index.shape[0], 1, device=index.device) * 0.65
     return exp(orientation, tangent_noise)
 
 

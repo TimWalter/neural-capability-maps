@@ -122,7 +122,7 @@ def cell_noisy(index: Int64[Tensor, "*batch"]) -> Float[Tensor, "*batch 3"]:
     position = cell(index)
     noise = torch.rand_like(position) - 0.5
     noise /= noise.norm(dim=-1, keepdim=True)
-    noise *= DISTANCE_BETWEEN_CELLS / 2 * torch.rand(index.shape[0], 1)
+    noise *= DISTANCE_BETWEEN_CELLS / 2 * torch.rand(index.shape[0], 1, device=index.device)
     return position + noise
 
 
