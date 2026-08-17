@@ -102,7 +102,7 @@ buffer = [
 ]
 buffer_offset = [0,0]
 
-desc = f"Train set file {file_idx} with morph offset {morph_offset} for {args.dof} DoF robots"
+desc = f"Eval set file {file_idx} with morph offset {morph_offset} for {args.dof} DoF robots"
 for idx, morph in enumerate(tqdm(morphs, desc=desc)):
     random_poses, random_labels = synthesise_data(morph, args.num_samples, return_poses=True, use_ik=True)
     boundary_poses, boundary_labels = sample_boundary(morph, args.num_geodesic, args.num_geodesic_samples)
@@ -124,7 +124,4 @@ for idx, morph in enumerate(tqdm(morphs, desc=desc)):
             file[i][file_offset[i]: file_offset[i] + active_data.shape[0]] = active_data.cpu().numpy()
             file_offset[i] += active_data.shape[0]
 
-            random_buffer_offset = 0
-
-
-
+            buffer_offset[i] = 0
