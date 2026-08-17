@@ -19,18 +19,18 @@ class Dataset:
     """
 
     @jaxtyped(typechecker=beartype)
-    def __init__(self, batch_size: int, shuffle: bool, kind: str):
+    def __init__(self, batch_size: int, shuffle: bool, path: str):
         """
         Initialise dataset.
 
         Args:
             batch_size: Batch size.
             shuffle: Whether to shuffle batches.
-            kind: String indicating which dataset to load.
+            path: String indicating which dataset to load.
         """
-
+        self.path = path
         self.shuffle = shuffle
-        self.root = zarr.open(Path(__file__).parent.parent.parent / 'data' / kind, mode="r")
+        self.root = zarr.open(Path(__file__).parent.parent.parent / 'data' / path, mode="r")
 
         file_indices = sorted([
             int(match.group(1))
@@ -194,11 +194,7 @@ class Dataset:
             return self[batch_idx]
 
 
-class TrainingSet(Dataset):
-    @jaxtyped(typechecker=beartype)
-    def __init__(self, batch_size: int, shuffle: bool):
-        super().__init__(batch_size, shuffle, "train")
-
+class IndexedCellSet(Dataset):
     @jaxtyped(typechecker=beartype)
     def _get_pose(self, cell_idx: Int64[Tensor, "batch 1"]) -> Float[Tensor, " batch 9"]:
         """
@@ -212,12 +208,7 @@ class TrainingSet(Dataset):
         return se3.to_vector(se3.cell_noisy(cell_idx[:, 0]))
 
 
-class ValidationSet(Dataset):
-    @jaxtyped(typechecker=beartype)
-    def __init__(self, batch_size: int, shuffle: bool, path: str = "val"):
-        self.path = path
-        super().__init__(batch_size, shuffle, path)
-
+class HomogeneousPoseSet(Dataset):
     @jaxtyped(typechecker=beartype)
     def _get_pose(self, pose: Float[Tensor, "batch 9"]) -> Float[Tensor, " batch 9"]:
         """
