@@ -300,7 +300,8 @@ def analytical_inverse_kinematics(mdh: Float[Tensor, "dofp1 3"], poses: Float[Te
 
 
 @jaxtyped(typechecker=beartype)
-def numerical_inverse_kinematics(inp_mdh: Float[Tensor, "dofp1 3"], inp_poses: Float[Tensor, "batch 4 4"],
+def numerical_inverse_kinematics(inp_mdh: Float[Tensor, "*batch dofp1 3"],
+                                 inp_poses: Float[Tensor, "batch 4 4"],
                                  num_seeds: int = 10) \
         -> tuple[Float[Tensor, "batch dofp1 1"], Float[Tensor, "batch"]]:
     """
@@ -329,11 +330,15 @@ def numerical_inverse_kinematics(inp_mdh: Float[Tensor, "dofp1 3"], inp_poses: F
         device = inp_mdh.device
         dtype = inp_mdh.dtype
         batch_size = poses.shape[0]
-        dof = inp_mdh.shape[0] - 1
+        dof = inp_mdh.shape[-2] - 1
 
         total_batch = batch_size * num_seeds
 
-        mdh = inp_mdh.unsqueeze(0).expand(total_batch, -1, -1)
+        if inp_mdh.ndim == 3:
+            chunk_mdh = inp_mdh[batch_idx:batch_idx + 10000]
+            mdh = chunk_mdh.unsqueeze(1).expand(-1, num_seeds, -1, -1).reshape(total_batch, dof + 1, 3)
+        else:
+            mdh = inp_mdh.unsqueeze(0).expand(total_batch, -1, -1)
         poses = poses.unsqueeze(1).expand(-1, num_seeds, -1, -1).reshape(total_batch, 4, 4)
 
         # Initialize joints (randomly)
