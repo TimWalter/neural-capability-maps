@@ -50,7 +50,7 @@ def sample_workspace(morph: Float[Tensor, "*batch dof 3"], joint_limits: Float[T
 @jaxtyped(typechecker=beartype)
 def fk_approximation(morph: Float[Tensor, "dofp1 3"],
                      debug: bool = False, seconds: int = 60,
-                     batch_size: int = None) -> \
+                     batch_size: int | None = None) -> \
         Int64[Tensor, "num_samples"] | tuple[Int64[Tensor, "num_samples"], tuple[int, int, float, float, float], int]:
     """
     Estimat the workspace using only forward kinematics, a discretisation of SE(3) and the closed world assumption.
