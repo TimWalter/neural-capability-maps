@@ -9,7 +9,6 @@ from jaxtyping import Float, Bool, jaxtyped, Int
 from torch import Tensor
 
 from ram.model import Model
-from ram.dataset.loader import TrainingSet, ValidationSet
 from paper_archive.utils import bootstrap_mean_ci
 
 
@@ -17,41 +16,24 @@ class Logger:
     @jaxtyped(typechecker=beartype)
     def __init__(self,
                  trial: optuna.Trial | None,
-                 training_set: TrainingSet,
-                 validation_set: ValidationSet,
-                 boundary_set: ValidationSet,
                  hyperparameter: dict,
-                 epochs: int,
-                 early_stopping: int,
-                 lr: float,
                  model: Model,
+                 group: str | None = None,
+                 threshold:float =0.5
                  ):
         """
         Initialise the logger.
 
         Args:
             trial: Optuna trial.
-            training_set: Training set.
-            validation_set: Validation set.
-            boundary_set: Validation set with boundary poses.
-            hyperparameter: Dict of hyperparameters for metadata.
-            epochs: Epochs for metadata.
-            early_stopping: Early stopping criteria for metadata.
-            lr: Learning rate for metadata.
+            hyperparameter: Dict of hyperparameters for metadata and model loading.
             model: Model for saving.
+            group: W&B group.
+            threshold: Binary classification threshold
         """
-        self.training_set = training_set
-        self.validation_set = validation_set
-        self.boundary_set = boundary_set
-        metadata = {"num_training_samples": len(training_set) * training_set.batch_size,
-                    "num_validation_samples": len(validation_set) * validation_set.batch_size,
-                    "num_boundary_samples": len(boundary_set) * boundary_set.batch_size,
-                    "hyperparameter": hyperparameter,
-                    "epochs": epochs,
-                    "batch_size": training_set.batch_size,
-                    "early_stopping": early_stopping,
-                    "lr": lr}
-        self.run = self.setup_wandb(trial, metadata)
+        self.threshold = threshold
+        metadata = {"hyperparameter": hyperparameter}
+        self.run = self.setup_wandb(trial, metadata, group)
 
         parts = self.run.name.split("-")
         self.folder = Path(__file__).parent.parent / "data" / "trained_models" / f"{parts[-1]}-{'-'.join(parts[:-1])}"
@@ -60,22 +42,23 @@ class Logger:
 
         self.model = model
         self.buffer = {}
-        self.step = 0
 
     @jaxtyped(typechecker=beartype)
-    def setup_wandb(self, trial: optuna.Trial | None, metadata: dict) -> wandb.Run:
+    def setup_wandb(self, trial: optuna.Trial | None, metadata: dict, group: str | None = None) -> wandb.Run:
         """
         Set up the Weights & Biases run.
 
         Args:
             trial: Optuna trial for naming the run.
             metadata: metadata.
+            group: W&B group.
 
         Return:
             Weights & Biases run
         """
         # wandb.login(key="")
-        run = wandb.init(project="RAM", config=metadata, dir=Path(__file__).parent.parent / "data" /"wandb")
+        run = wandb.init(project="RAM", config=metadata, group=group,
+                         dir=Path(__file__).parent.parent / "data" / "wandb")
         if trial is not None:
             run.name = f"trial/{trial.number}/{run.name}"
 
@@ -97,13 +80,14 @@ class Logger:
 
     @jaxtyped(typechecker=beartype)
     def __del__(self):
+        """
+        Upon deletion ensure the W&B run finished.
+        """
         self.run.finish()
 
     @jaxtyped(typechecker=beartype)
     @torch.no_grad()
     def log_training(self,
-                     epoch: int,
-                     batch_idx: int,
                      label: Bool[Tensor, "batch"],
                      logit: Float[Tensor, "batch"],
                      loss: Float[Tensor, ""]
@@ -112,60 +96,66 @@ class Logger:
         Create the log of a training step and post it to W&B.
 
         Args:
-            epoch: Current epoch, used to calculate the overall training step.
-            batch_idx: Current batch idx, used to calculate the overall training step.
             label: Reachability labels.
             logit: Predicted logits.
             loss: Loss on the batch.
         """
         data = {"Loss": loss,
                 "Reachable [%]": label.sum().item() / label.shape[0] * 100}
-        data |= self.compute_metrics(logit, label)
+        data |= self.compute_metrics(logit, label, threshold=self.threshold)
         data = self.assign_space(data, "Training")
 
-        self.step = epoch * len(self.training_set) + batch_idx
-        self.run.log(data=data, step=self.step, commit=True)
-
+        self.run.log(data=data, commit=True)
 
     @jaxtyped(typechecker=beartype)
     def log_validation(self,
-                       batch_idx: int,
+                       morph_index: Int[Tensor, "batch"],
                        label: Bool[Tensor, "batch"],
                        logit: Float[Tensor, "batch"],
-                       loss: Float[Tensor, ""],
-                       boundary: bool = False):
+                       loss: float | Float[Tensor, ""]| Float[Tensor, "1"],
+                       ):
         """
-        Log a validation step.
+        Create the log of a validation step. Requires a call to aggregate_validation to post to W&B.
+
+        Args:
+            morph_index: Morphology indices.
+            label: Reachability labels.
+            logit: Predicted logits.
+            loss: Loss on the batch.
 
         """
-        if "loss" not in self.buffer:
-            self.buffer["loss"] = 0.0
-        if "logit" not in self.buffer:
-            self.buffer["logit"] = []
-        if "label" not in self.buffer:
-            self.buffer["label"] = []
         if "morph_index" not in self.buffer:
             self.buffer["morph_index"] = []
+        if "label" not in self.buffer:
+            self.buffer["label"] = []
+        if "logit" not in self.buffer:
+            self.buffer["logit"] = []
+        if "loss" not in self.buffer:
+            self.buffer["loss"] = 0.0
 
+        self.buffer["morph_index"] += [morph_index.cpu()]
         self.buffer["label"] += [label.cpu()]
         self.buffer["logit"] += [logit.cpu()]
         self.buffer["loss"] += loss
 
-        active_set = self.boundary_set if boundary else self.validation_set
-        self.buffer["morph_index"] += [active_set._get_batch(batch_idx)[:, 0].long().cpu()]
-        if batch_idx + 1 == len(active_set):
-            data = {"Loss": self.buffer["loss"] / len(active_set)}
-            data |= self.compute_metrics(torch.cat(self.buffer["logit"]),
-                                         torch.cat(self.buffer["label"]),
-                                         torch.cat(self.buffer["morph_index"]))
+    @jaxtyped(typechecker=beartype)
+    def aggregate_validation(self, boundary: bool):
+        """
+        Aggregate validation steps and post to W&B.
 
+        Args:
+            boundary: Whether we evaluated random or boundary samples.
+        """
+        logit = torch.cat(self.buffer["logit"])
+        label = torch.cat(self.buffer["label"])
+        morph_index = torch.cat(self.buffer["morph_index"])
 
-            data = self.assign_space(data, "Validation")
-            if boundary:
-                data = self.assign_space(data, "Boundary")
+        data = self.compute_metrics(logit, label, morph_index, self.threshold)
+        data |= {"Loss": self.buffer["loss"] / logit.shape[0]}
 
-            self.run.log(data=data, step=self.step + 1, commit=False)
-            self.buffer = {}
+        data = self.assign_space(data, "Boundary" if boundary else "Validation")
+        self.run.log(data=data, commit=False)
+        self.buffer = {}
 
     @staticmethod
     @jaxtyped(typechecker=beartype)
@@ -188,40 +178,51 @@ class Logger:
     def compute_metrics(
             logit: Float[Tensor, "batch"],
             label: Bool[Tensor, "batch"],
-            morph_index: Tensor | None = None
+            morph_index: Tensor | None = None,
+            threshold: float = 0.5
     ) -> dict:
         """
-        Compute classification metrics.
+        Compute logging metrics.
 
         Args:
             logit: Predicted logits.
             label: Reachability labels.
-            morph_index: If grouped by morphology index, we calculate mean and confidence interval.
-
+            morph_index: Morphology indices.
+            threshold: Binary classification threshold.
         Returns:
-            Dictionary with binary confusion matrix, F1 Score, and a prediction histogram.
+            Metrics
         """
-        metrics = {'Confidence': 2*(torch.nn.Sigmoid()(logit)-0.5).abs().mean()}
 
-        confusion_matrix = binary_confusion_matrix(logit, label, morph_index)
+        metrics = {'Confidence': 2 * (torch.nn.Sigmoid()(logit) - 0.5).abs().mean().item()}
+
+        confusion_matrix = binary_confusion_matrix(logit, label, morph_index, threshold)
         tp = confusion_matrix[:, 0, 0]
         fn = confusion_matrix[:, 0, 1]
         fp = confusion_matrix[:, 1, 0]
         tn = confusion_matrix[:, 1, 1]
 
-        valid_mask = (tp + fn > 0.0) & (fp + tn > 0.0)
-        tp = tp[valid_mask]
-        fn = fn[valid_mask]
-        fp = fp[valid_mask]
-        tn = tn[valid_mask]
+        f1 = 2 * tp / (2 * tp + fp + fn + 1e-6) * 100
+        perfect_negatives = (tp == 0.0) & (fn == 0.0) & (fp == 0.0) & (tn > 0.0)
+        f1[perfect_negatives] = 100.0
 
-        morph_metrics = torch.stack([
-            tp, fn, fp, tn,
-            2 * tp / (2 * tp + fp + fn + 1e-6) * 100
-        ], dim=-1)
+        p_total = torch.clamp(tp + fn, min=1.0)
+        n_total = torch.clamp(fp + tn, min=1.0)
 
+        tpr = (tp / p_total) * 100
+        fnr = (fn / p_total) * 100
+        fpr = (fp / n_total) * 100
+        tnr = (tn / n_total) * 100
+
+        balanced_accuracy = 0.5 * (tpr + tnr)
+
+        morph_metrics = torch.stack([balanced_accuracy, tpr, fnr, fpr, tnr, f1], dim=-1)
         mean_vals, ci_lower, ci_upper = bootstrap_mean_ci(morph_metrics, n_bootstraps=1000, ci=95)
-        metric_names = ['True Positives', 'False Negatives', 'False Positives', 'True Negatives', 'F1 Score']
+        metric_names = ['Balanced Accuracy',
+                        'True Positive Rate',
+                        'False Negative Rate',
+                        'False Positive Rate',
+                        'True Negative Rate',
+                        'F1 Score']
         for i, name in enumerate(metric_names):
             metrics[f'{name} (Mean)'] = mean_vals[i].item()
             metrics[f'{name} (CI Lower)'] = ci_lower[i].item()
@@ -233,39 +234,37 @@ class Logger:
 @jaxtyped(typechecker=beartype)
 def binary_confusion_matrix(logit: Float[Tensor, "batch"],
                             label: Bool[Tensor, "batch"],
-                            morph_index:Int[Tensor, "batch"]|None = None) \
-        -> Float[Tensor, "2 2"] | Float[Tensor, "n_morphs 2 2"]:
+                            morph_index: Int[Tensor, "batch"] | None = None,
+                            threshold:float = 0.5) \
+        -> Float[Tensor, "n_morphs 2 2"]:
     """
-    Compute the binary confusion matrix.
+    Compute the binary confusion matrix. Macro-averaged if morph_index is not None.
 
     Args:
         logit: Predicted logits.
         label: Label.
         morph_index: Morphology indices.
+        threshold: Binary classification threshold.
 
     Returns:
          Binary confusion matrix.
     """
+    mask = morph_index
     if morph_index is None:
-        morph_index = torch.zeros_like(label).int()
-
-    predicted = torch.nn.Sigmoid()(logit) > 0.5
-
-    unique_morphs, mapped_indices = torch.unique(morph_index, return_inverse=True)
+        mask = torch.zeros_like(label).int()
+    unique_morphs, mapped_indices = torch.unique(mask, return_inverse=True)
     num_morphs = len(unique_morphs)
 
+    predicted = torch.sigmoid(logit) > threshold
     tp_count = torch.bincount(mapped_indices, weights=(predicted & label).float(), minlength=num_morphs)
     fn_count = torch.bincount(mapped_indices, weights=(~predicted & label).float(), minlength=num_morphs)
     fp_count = torch.bincount(mapped_indices, weights=(predicted & ~label).float(), minlength=num_morphs)
     tn_count = torch.bincount(mapped_indices, weights=(~predicted & ~label).float(), minlength=num_morphs)
 
-    p_total = tp_count + fn_count
-    n_total = fp_count + tn_count
-
     confusion_matrix = torch.zeros(num_morphs, 2, 2)
-    confusion_matrix[:, 0, 0] = (tp_count / p_total) * 100
-    confusion_matrix[:, 0, 1] = (fn_count / p_total) * 100
-    confusion_matrix[:, 1, 0] = (fp_count / n_total) * 100
-    confusion_matrix[:, 1, 1] = (tn_count / n_total) * 100
+    confusion_matrix[:, 0, 0] = tp_count
+    confusion_matrix[:, 0, 1] = fn_count
+    confusion_matrix[:, 1, 0] = fp_count
+    confusion_matrix[:, 1, 1] = tn_count
 
     return confusion_matrix

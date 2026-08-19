@@ -22,3 +22,5 @@ trace.json
 *.png
 *.usd
 *.mov
+
+.claude

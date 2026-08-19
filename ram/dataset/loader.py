@@ -19,7 +19,7 @@ class Dataset:
     """
 
     @jaxtyped(typechecker=beartype)
-    def __init__(self, batch_size: int, shuffle: bool, path: str):
+    def __init__(self, batch_size: int, shuffle: bool, path: str, device: torch.device):
         """
         Initialise dataset.
 
@@ -27,7 +27,9 @@ class Dataset:
             batch_size: Batch size.
             shuffle: Whether to shuffle batches.
             path: String indicating which dataset to load.
+            device: Device to load to.
         """
+        self.device = device
         self.path = path
         self.shuffle = shuffle
         self.root = zarr.open(Path(__file__).parent.parent.parent / 'data' / path, mode="r")
@@ -37,12 +39,12 @@ class Dataset:
             for k in self.root.array_keys()
             if (match := re.search(r'^(\d+)_samples$', k))
         ])
-        self.morphologies = [torch.from_numpy(self.root[f"{idx}_morphologies"][:]) for idx in file_indices]
-        self.dofs = [morph.shape[1] for morph in self.morphologies]
+        morphologies = [torch.from_numpy(self.root[f"{idx}_morphologies"][:]) for idx in file_indices]
+        self.dofs = [morph.shape[1] for morph in morphologies]
         self.max_dof = max(self.dofs)
-        self.morphologies = [torch.cat([m, torch.zeros(m.shape[0], self.max_dof - m.shape[1], 3)], dim=1) for m in
-                             self.morphologies]
-        self.morphologies = torch.cat(self.morphologies, dim=0)
+        morphologies = [torch.cat([m, torch.zeros(m.shape[0], self.max_dof - m.shape[1], 3)], dim=1)
+                        for m in morphologies]
+        self.morphologies = torch.cat(morphologies, dim=0).to(device)
 
         self.keys = [f"{idx}_samples" for idx in file_indices]
 
@@ -73,7 +75,7 @@ class Dataset:
     def _cache_chunk(self, chunk_idx: int):
         """
         Loads a chunk into memory.
-        Chunks are the atoms of reading and chunk size is optimised for loading speed from disk.
+        Chunks are the atoms of reading, and chunk size is optimised for loading speed from disk.
 
         Args:
             chunk_idx: Index of chunk to load.
@@ -86,7 +88,7 @@ class Dataset:
         start = local_chunk_idx * self.chunk_size
         end = start + self.chunk_size
 
-        self.current_chunk = torch.from_numpy(self.root[key][start:end])
+        self.current_chunk = torch.from_numpy(self.root[key][start:end]).pin_memory()
         self.current_chunk_idx = chunk_idx
 
     @jaxtyped(typechecker=beartype)
@@ -129,15 +131,27 @@ class Dataset:
     def __getitem__(self, batch_idx: int) -> tuple[
         Float[Tensor, "batch {self.max_dof} 3"],
         Float[Tensor, "batch 9"],
-        Bool[Tensor, "batch"]
+        Bool[Tensor, "batch"],
+        Int[Tensor, "batch"]
     ]:
-        batch = self._get_batch(batch_idx)
+        """
+        Get batch.
 
-        morph = self.morphologies[batch[:, 0].long()]
+        Args:
+            batch_idx: Batch to retrieve
+
+        Returns:
+            Morphology, pose, label, and morphology index.
+
+        """
+        batch = self._get_batch(batch_idx).to(self.device, non_blocking=True)
+
+        morph_index = batch[:, 0].long()
+        morph = self.morphologies[morph_index]
         pose = self._get_pose(batch[:, 1:-1])
         label = batch[:, -1].bool()
 
-        return morph.pin_memory(), pose.pin_memory(), label.pin_memory()
+        return morph, pose, label, morph_index  # Morph index only for macro-averaging in logging
 
     @jaxtyped(typechecker=beartype)
     def __iter__(self):
@@ -163,13 +177,14 @@ class Dataset:
     def get_random_batch(self) -> tuple[
         Float[Tensor, "batch {self.max_dof} 3"],
         Float[Tensor, "batch 9"],
-        Bool[Tensor, "batch"]
+        Bool[Tensor, "batch"],
+        Int[Tensor, "batch"]
     ]:
         """
         Return a random batch
 
         Returns:
-            morphology, pose, label
+            morphology, pose, label, morph index
         """
         batch_idx = torch.randint(0, self.num_batches, (1,)).item()
         return self[batch_idx]
@@ -178,13 +193,14 @@ class Dataset:
     def get_semi_random_batch(self) -> tuple[
         Float[Tensor, "batch {self.max_dof} 3"],
         Float[Tensor, "batch 9"],
-        Bool[Tensor, "batch"]
+        Bool[Tensor, "batch"],
+        Int[Tensor, "batch"]
     ]:
         """
         Get a random batch within the current chunk.
 
         Returns:
-            morphology, pose, label
+            morphology, pose, label, morph index
         """
         if self.current_chunk_idx is None:
             return self.get_random_batch()

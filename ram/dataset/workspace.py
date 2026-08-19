@@ -12,7 +12,7 @@ from tabulate import tabulate
 
 import ram.dataset.r3 as r3
 import ram.dataset.se3 as se3
-from ram.autotune_batch_size import get_batch_size
+from ram.dataset.autotune_batch_size import get_batch_size
 from ram.dataset.kinematics import transformation_matrix, forward_kinematics, inverse_kinematics
 from ram.dataset.self_collision import collision_check
 from ram.dataset.morphology import get_joint_limits

@@ -34,10 +34,7 @@ class Model(nn.Module):
         model = cls(**metadata["hyperparameter"])
         model_folder = Path(str(model_dir / folder))
         prime = model_folder / "model.pth"
-        if prime.exists():
-            model.load_state_dict(torch.load(prime))
-        else:
-            model.load_state_dict(torch.load(model_folder / "checkpoint.pth"))
+        model.load_state_dict(torch.load(prime if prime.exists() else model_folder / "checkpoint.pth"))
         return model
 
     def __init__(self,
@@ -86,6 +83,6 @@ class Model(nn.Module):
     @torch.inference_mode()
     def predict(self, *args, **kwargs):
         """
-        forward with inference mode
+        Forward with inference mode
         """
         return self.forward(*args, **kwargs)
