@@ -1,3 +1,4 @@
+import random
 import argparse
 
 import torch
@@ -6,71 +7,83 @@ from tqdm import tqdm
 
 from ram.logger import Logger
 from ram.model import Model
-from ram.dataset.loader import TrainingSet, ValidationSet
+from ram.dataset.loader import IndexedCellSet, HomogeneousPoseSet
 
 
-def validate_boundary(model, logger, device, boundary_set, loss_function):
+def validate_boundary(model: Model, logger: Logger, boundary_set: HomogeneousPoseSet, loss_function):
     model.eval()
-    for batch_idx, (morph, pose, label) in enumerate(boundary_set):
-        morph = morph.to(device, non_blocking=True)
-        pose = pose.to(device, non_blocking=True)
-        label = label.to(device, non_blocking=True)
-
+    for batch_idx, (morph, pose, label, morph_index) in enumerate(boundary_set):
         logit = model.predict(morph, pose)
         loss = loss_function(logit, label.float())
+        logger.log_validation(morph_index, label, logit, loss)
+    logger.aggregate_validation(True)
 
-        logger.log_validation(batch_idx, label, logit, loss, True)
 
-
-def validate(model, logger, device, validation_set, loss_function):
-    model.eval()
+def validate(model: Model, logger: Logger, validation_set: HomogeneousPoseSet, loss_function):
     loss = 0.0
-    for batch_idx, (morph, pose, label) in enumerate(validation_set):
-        morph = morph.to(device, non_blocking=True)
-        pose = pose.to(device, non_blocking=True)
-        label = label.to(device, non_blocking=True)
-
+    model.eval()
+    for batch_idx, (morph, pose, label, morph_index) in enumerate(validation_set):
         logit = model.predict(morph, pose)
         loss += loss_function(logit, label.float())
-
-        logger.log_validation(batch_idx, label, logit, loss)
+        logger.log_validation(morph_index, label, logit, loss)
+    logger.aggregate_validation(False)
     loss /= len(validation_set)
-    return loss
+    return loss.cpu().item()
 
 
-def main(epochs: int,
+def main(training_set_path: str,
+         validation_set_path: str | None,
+         pretrain: int,
+         epochs: int,
          batch_size: int,
          early_stopping: int,
+         validation_interval: int,
          lr: float,
-         pretrain: int,
          hyperparameter: dict,
-         trial: optuna.Trial = None):
-    device = torch.device("cuda")
+         group: str | None,
+         trial: optuna.Trial | None = None,
+         stop_after: int | None = None) -> float:
+    """
+    Train a model
 
-    training_set = TrainingSet(batch_size, True)
-    validation_set = ValidationSet(batch_size, False)
-    boundary_set = ValidationSet(batch_size, False, validation_set.path + "_boundary")
+    Args:
+        training_set_path: Path to the training set.
+        validation_set_path: Path to the validation set can be None.
+        pretrain: If unequal to -1, specifies the model id to initialise with.
+        epochs: Number of epochs.
+        batch_size: Batch size.
+        early_stopping: If unequal to -1, specifies the number of underperforming validations that trigger early stopping.
+        validation_interval: After how many batches should there be validation.
+        lr: Learning rate.
+        hyperparameter: Hyperparameters of the model.
+        group: W&B group.
+        trial: Optuna trial.
+        stop_after: Determines the number of batches to run per epoch can be None.
+
+    Returns:
+        Minimum validation loss.
+    """
+    device = torch.device("cuda")
 
     model = Model(**hyperparameter)
     if pretrain != -1:
         model = model.from_id(pretrain)
     model = model.to(device)
-
-    loss_function = torch.nn.BCEWithLogitsLoss(reduction='mean')
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 
-    logger = Logger(trial, training_set, validation_set, boundary_set, hyperparameter, epochs, early_stopping, lr,
-                    model)
+    training_set = IndexedCellSet(batch_size, True, training_set_path, device)
+    if validation_set_path is not None:
+        validation_set = HomogeneousPoseSet(batch_size, False, validation_set_path, device)
+        boundary_set = HomogeneousPoseSet(batch_size, False, validation_set.path + "_boundary", device)
 
+    loss_function = torch.nn.BCEWithLogitsLoss(reduction='mean')
     min_loss = torch.inf
     early_stopping_counter = 0
+
+    logger = Logger(trial, hyperparameter, model, group)
     for e in range(epochs):
         model.train()
-        for batch_idx, (morph, pose, label) in enumerate(tqdm(training_set, desc=f"Training")):
-            morph = morph.to(device, non_blocking=True)
-            pose = pose.to(device, non_blocking=True)
-            label = label.to(device, non_blocking=True)
-
+        for batch_idx, (morph, pose, label, _) in enumerate(tqdm(training_set, desc=f"Training")):
             model.zero_grad()
             logit = model(morph, pose)
             loss = loss_function(logit, label.float())
@@ -78,13 +91,16 @@ def main(epochs: int,
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
-            logger.log_training(e, batch_idx, label, logit, loss)
+            logger.log_training(label, logit, loss)
 
-            if batch_idx % 500_000 == 0:
+            if stop_after is not None and stop_after <= batch_idx:
+                break
+
+            if validation_set_path is not None and batch_idx % validation_interval == 0:
+                logger.checkpoint()
                 with torch.no_grad():
-                    logger.checkpoint()
-                    validate_boundary(model, logger, device, boundary_set, loss_function)
-                    loss = validate(model, logger, device, validation_set, loss_function)
+                    validate_boundary(model, logger, boundary_set, loss_function)
+                    loss = validate(model, logger, validation_set, loss_function)
                     if loss < min_loss:
                         min_loss = loss
                         early_stopping_counter = 0
@@ -97,22 +113,34 @@ def main(epochs: int,
                     if trial is not None:
                         trial.report(loss, e)
                         if trial.should_prune():
-                            del logger
+                            logger.run.finish()
                             raise optuna.TrialPruned()
                     model.train()
-
+        logger.checkpoint()
     return min_loss
 
 
 if __name__ == '__main__':
-    torch.manual_seed(0)
-
     parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, default=-1)
+
+    parser.add_argument("--training_set_path", type=str, default="train")
+    parser.add_argument("--validation_set_path", type=str, default="val")
+    parser.add_argument("--pretrain", type=int, default=-1)
+
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=1000)
     parser.add_argument("--early_stopping", type=int, default=4)
+    parser.add_argument("--validation_interval", type=int, default=500_000)
+
     parser.add_argument("--lr", type=float, default=3e-4)
-    parser.add_argument("--pretrain", type=int, default=-1)
+
+    parser.add_argument("--group", type=str, default=None, help="W&B group")
     args = parser.parse_args()
+
+    if args.seed != -1:
+        torch.manual_seed(args.seed)
+        random.seed(args.seed)
+    del args.seed
 
     main(**vars(args), hyperparameter={})

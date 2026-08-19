@@ -9,7 +9,6 @@ from jaxtyping import Float, Bool, jaxtyped, Int
 from torch import Tensor
 
 from ram.model import Model
-from paper_archive.utils import bootstrap_mean_ci
 
 
 class Logger:
@@ -19,7 +18,7 @@ class Logger:
                  hyperparameter: dict,
                  model: Model,
                  group: str | None = None,
-                 threshold:float =0.5
+                 threshold: float = 0.5
                  ):
         """
         Initialise the logger.
@@ -112,7 +111,7 @@ class Logger:
                        morph_index: Int[Tensor, "batch"],
                        label: Bool[Tensor, "batch"],
                        logit: Float[Tensor, "batch"],
-                       loss: float | Float[Tensor, ""]| Float[Tensor, "1"],
+                       loss: float | Float[Tensor, ""] | Float[Tensor, "1"],
                        ):
         """
         Create the log of a validation step. Requires a call to aggregate_validation to post to W&B.
@@ -235,7 +234,7 @@ class Logger:
 def binary_confusion_matrix(logit: Float[Tensor, "batch"],
                             label: Bool[Tensor, "batch"],
                             morph_index: Int[Tensor, "batch"] | None = None,
-                            threshold:float = 0.5) \
+                            threshold: float = 0.5) \
         -> Float[Tensor, "n_morphs 2 2"]:
     """
     Compute the binary confusion matrix. Macro-averaged if morph_index is not None.
@@ -268,3 +267,49 @@ def binary_confusion_matrix(logit: Float[Tensor, "batch"],
     confusion_matrix[:, 1, 1] = tn_count
 
     return confusion_matrix
+
+
+@jaxtyped(typechecker=beartype)
+def bootstrap_mean_ci(trajectories: Float[Tensor, "n_trajectories n_timepoints"], n_bootstraps: int = 1000,
+                      ci: int = 95) \
+        -> tuple[
+            Float[Tensor, "n_timepoints"],
+            Float[Tensor, "n_timepoints"],
+            Float[Tensor, "n_timepoints"]
+        ]:
+    """
+    Calculates the mean and confidence interval for a set of trajectories.
+
+    Args:
+        trajectories: A 2D tensor where each row is a trajectory.
+                                     Shape: (n_trajectories, n_timepoints).
+        n_bootstraps: The number of bootstrap samples to generate.
+        ci: The desired confidence interval in percent.
+
+    Returns:
+        The mean trajectory and the confidence interval.
+    """
+    n_trajectories, n_timepoints = trajectories.shape
+
+    boot_indices = torch.randint(
+        low=0,
+        high=n_trajectories,
+        size=(n_bootstraps, n_trajectories),
+        device=trajectories.device
+    )
+
+    bootstrap_samples = trajectories[boot_indices]
+    bootstrap_means = torch.mean(bootstrap_samples, dim=1)
+    mean_trajectory = torch.mean(trajectories, dim=0)
+
+    lower_percentile = ((100 - ci) / 2) / 100
+    upper_percentile = (100 - (100 - ci) / 2) / 100
+
+    quantiles = torch.tensor([lower_percentile, upper_percentile], device=trajectories.device)
+    ci_bounds = torch.quantile(bootstrap_means, quantiles, dim=0)
+
+    # Basic (reverse-percentile) bootstrap: reflect quantiles around the observed mean
+    ci_lower = 2 * mean_trajectory - ci_bounds[1]
+    ci_upper = 2 * mean_trajectory - ci_bounds[0]
+
+    return mean_trajectory, ci_lower, ci_upper
