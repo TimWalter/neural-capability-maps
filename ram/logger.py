@@ -204,14 +204,7 @@ class Logger:
         perfect_negatives = (tp == 0.0) & (fn == 0.0) & (fp == 0.0) & (tn > 0.0)
         f1[perfect_negatives] = 100.0
 
-        p_total = torch.clamp(tp + fn, min=1.0)
-        n_total = torch.clamp(fp + tn, min=1.0)
-
-        tpr = (tp / p_total) * 100
-        fnr = (fn / p_total) * 100
-        fpr = (fp / n_total) * 100
-        tnr = (tn / n_total) * 100
-
+        tpr, fnr, fpr, tnr = counts_to_rates(tp, fn, fp, tn)
         balanced_accuracy = 0.5 * (tpr + tnr)
 
         morph_metrics = torch.stack([balanced_accuracy, tpr, fnr, fpr, tnr, f1], dim=-1)
@@ -268,6 +261,35 @@ def binary_confusion_matrix(logit: Float[Tensor, "batch"],
 
     return confusion_matrix
 
+def counts_to_rates(tp: Float[Tensor, "n_morphs"],
+                    fn: Float[Tensor, "n_morphs"],
+                    fp: Float[Tensor, "n_morphs"],
+                    tn: Float[Tensor, "n_morphs"]) -> tuple[
+    Float[Tensor, "n_morphs"],
+    Float[Tensor, "n_morphs"],
+    Float[Tensor, "n_morphs"],
+    Float[Tensor, "n_morphs"]
+]:
+    """
+    Transform binary confusion matrix counts into rates
+
+    Args:
+        tp: True positives.
+        fn: False negatives.
+        fp: False positives.
+        tn: True negatives.
+
+    Returns:
+        True positive rate, false negative rate, false positive rate, true negative rate.
+    """
+    p_total = torch.clamp(tp + fn, min=1.0)
+    n_total = torch.clamp(fp + tn, min=1.0)
+
+    tpr = (tp / p_total) * 100
+    fnr = (fn / p_total) * 100
+    fpr = (fp / n_total) * 100
+    tnr = (tn / n_total) * 100
+    return tpr, fnr, fpr, tnr
 
 @jaxtyped(typechecker=beartype)
 def bootstrap_mean_ci(trajectories: Float[Tensor, "n_trajectories n_timepoints"], n_bootstraps: int = 1000,

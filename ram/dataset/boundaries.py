@@ -33,13 +33,13 @@ def get_boundary_pairs(morph: Float[Tensor, "dofp1 3"], num_pairs: int, oversamp
     reachable_pose = sample_workspace(morph.unsqueeze(0).expand(oversampling * num_pairs, -1, -1),
                                       joint_limits.unsqueeze(0).expand(oversampling * num_pairs, -1, -1))[0][:num_pairs]
     for i in range(10):
+        if reachable_pose.shape[0] == num_pairs:
+            break
         new = sample_workspace(morph.unsqueeze(0).expand(oversampling * (num_pairs - reachable_pose.shape[0]), -1, -1),
                                joint_limits.unsqueeze(0).expand(oversampling * (num_pairs - reachable_pose.shape[0]),
                                                                 -1, -1)
                                )[0][:num_pairs - reachable_pose.shape[0]]
         reachable_pose = torch.cat([reachable_pose, new])
-        if reachable_pose.shape[0] == num_pairs:
-            break
     if reachable_pose.shape[0] != num_pairs:
         if reachable_pose.shape[0] > 0:
             repeats = (num_pairs + reachable_pose.shape[0] - 1) // reachable_pose.shape[0]
@@ -51,11 +51,11 @@ def get_boundary_pairs(morph: Float[Tensor, "dofp1 3"], num_pairs: int, oversamp
     unreachable_pose = sample_poses_in_reach(oversampling * num_pairs, morph)
     unreachable_pose = unreachable_pose[inverse_kinematics(morph, unreachable_pose)[-1] == -1][:num_pairs]
     for i in range(10):
+        if unreachable_pose.shape[0] == num_pairs:
+            break
         new = sample_poses_in_reach(oversampling * (num_pairs - unreachable_pose.shape[0]), morph)
         new = new[inverse_kinematics(morph, new)[-1] == -1][:(num_pairs - unreachable_pose.shape[0])]
         unreachable_pose = torch.cat([unreachable_pose, new])
-        if unreachable_pose.shape[0] == num_pairs:
-            break
     if unreachable_pose.shape[0] != num_pairs:
         if unreachable_pose.shape[0] > 0:
             repeats = (num_pairs + unreachable_pose.shape[0] - 1) // unreachable_pose.shape[0]

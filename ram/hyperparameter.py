@@ -43,7 +43,8 @@ if __name__ == "__main__":
                                 direction="minimize",
                                 sampler=optuna.samplers.TPESampler(),
                                 pruner=optuna.pruners.HyperbandPruner(),
-                                storage=f"sqlite:///{storage_path.resolve()}/hyperparameter.sqlite3")
+                                storage=f"sqlite:///{storage_path.resolve()}/hyperparameter.sqlite3",
+                                load_if_exists=True)
     args.group = args.study_name
     del args.study_name
     kwargs = vars(args)
