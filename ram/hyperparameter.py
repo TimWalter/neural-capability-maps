@@ -3,7 +3,7 @@ from pathlib import Path
 import argparse
 import optuna
 
-from train import main
+from train import train
 
 
 def objective(trial: optuna.Trial) -> float:
@@ -19,7 +19,7 @@ def objective(trial: optuna.Trial) -> float:
         },
         "lr": trial.suggest_float("lr", 1e-5, 1e-3, log=True)
     })
-    return main(**kwargs, pretrain=-1, early_stopping=-1, trial=trial)
+    return train(**kwargs, pretrain=-1, early_stopping=-1, trial=trial)
 
 
 if __name__ == "__main__":

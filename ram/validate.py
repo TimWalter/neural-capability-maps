@@ -6,7 +6,7 @@ from tqdm import tqdm
 from ram.logger import Logger
 from ram.model import Model
 from ram.dataset.loader import HomogeneousPoseSet
-from ram.train import validate_boundary, validate
+from ram.train import validation
 
 def best_threshold(model: Model, val_set: HomogeneousPoseSet, n_grid: int = 1024) -> float:
     """
@@ -54,7 +54,7 @@ def best_threshold(model: Model, val_set: HomogeneousPoseSet, n_grid: int = 1024
 
     return torch.sigmoid(grid[macro.argmax()].double()).item()
 
-def main(model_id: int, batch_size: int, val_set_path: str, test_set_path: str, group: str):
+def validate(model_id: int, batch_size: int, val_set_path: str, test_set_path: str, group: str):
     device = torch.device("cuda")
 
     model = Model.from_id(model_id).to(device)
@@ -68,8 +68,10 @@ def main(model_id: int, batch_size: int, val_set_path: str, test_set_path: str, 
     boundary_set = HomogeneousPoseSet(batch_size, False, test_set.path + "_boundary", device)
     logger = Logger(None, {}, model, group, threshold=threshold)
 
-    validate_boundary(model, logger, boundary_set, loss_function)
-    validate(model, logger, test_set, loss_function)
+    validation(model, logger, boundary_set, loss_function)
+    logger.aggregate_validation(True)
+    validation(model, logger, test_set, loss_function)
+    logger.aggregate_validation(False)
     logger.run.log(data={}, commit=True)
 
 
@@ -84,4 +86,4 @@ if __name__ == '__main__':
     parser.add_argument("--group", type=str, default=None, help="W&B group")
     args = parser.parse_args()
 
-    main(**vars(args))
+    validate(**vars(args))

@@ -10,39 +10,41 @@ from ram.model import Model
 from ram.dataset.loader import IndexedCellSet, HomogeneousPoseSet
 
 
-def validate_boundary(model: Model, logger: Logger, boundary_set: HomogeneousPoseSet, loss_function):
-    model.eval()
-    for batch_idx, (morph, pose, label, morph_index) in enumerate(boundary_set):
-        logit = model.predict(morph, pose)
-        loss = loss_function(logit, label.float())
-        logger.log_validation(morph_index, label, logit, loss)
-    logger.aggregate_validation(True)
+def validation(model: Model, logger: Logger, validation_set: HomogeneousPoseSet, loss_function) -> float:
+    """
+    Validate a model on the given set.
 
+    Args:
+        model: Model to evaluate.
+        logger: Logger to document.
+        validation_set: Data provider.
+        loss_function: Loss function.
 
-def validate(model: Model, logger: Logger, validation_set: HomogeneousPoseSet, loss_function):
+    Returns:
+        Average loss.
+    """
     loss = 0.0
     model.eval()
     for batch_idx, (morph, pose, label, morph_index) in enumerate(validation_set):
         logit = model.predict(morph, pose)
         loss += loss_function(logit, label.float())
         logger.log_validation(morph_index, label, logit, loss)
-    logger.aggregate_validation(False)
     loss /= len(validation_set)
     return loss.cpu().item()
 
 
-def main(training_set_path: str,
-         validation_set_path: str | None,
-         pretrain: int,
-         epochs: int,
-         batch_size: int,
-         early_stopping: int,
-         validation_interval: int,
-         lr: float,
-         hyperparameter: dict,
-         group: str | None,
-         trial: optuna.Trial | None = None,
-         stop_after: int | None = None) -> float:
+def train(training_set_path: str,
+          validation_set_path: str | None,
+          pretrain: int,
+          epochs: int,
+          batch_size: int,
+          early_stopping: int,
+          validation_interval: int,
+          lr: float,
+          hyperparameter: dict,
+          group: str | None,
+          trial: optuna.Trial | None = None,
+          stop_after: int | None = None) -> float:
     """
     Train a model
 
@@ -99,8 +101,10 @@ def main(training_set_path: str,
             if validation_set_path is not None and batch_idx % validation_interval == 0:
                 logger.checkpoint()
                 with torch.no_grad():
-                    validate_boundary(model, logger, boundary_set, loss_function)
-                    loss = validate(model, logger, validation_set, loss_function)
+                    validation(model, logger, boundary_set, loss_function)
+                    logger.aggregate_validation(True)
+                    loss = validation(model, logger, validation_set, loss_function)
+                    logger.aggregate_validation(False)
                     if loss < min_loss:
                         min_loss = loss
                         early_stopping_counter = 0
@@ -143,4 +147,4 @@ if __name__ == '__main__':
         random.seed(args.seed)
     del args.seed
 
-    main(**vars(args), hyperparameter={})
+    train(**vars(args), hyperparameter={})
