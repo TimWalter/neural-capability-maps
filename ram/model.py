@@ -6,9 +6,14 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from jaxtyping import Float
+from huggingface_hub import PyTorchModelHubMixin
 
 
-class Model(nn.Module):
+class Model(nn.Module,
+            PyTorchModelHubMixin,
+            repo_url="https://huggingface.co/TimWalter/RAM",
+            paper_url="https://huggingface.co/papers/2606.09108",
+            license="mit"):
     """
     RAM model that predicts reachability from a modified Denavit-Hartenberg morphology parametrisation and a pose.
     """
