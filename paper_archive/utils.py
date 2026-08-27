@@ -16,6 +16,13 @@ from ram.dataset.self_collision import get_capsules, LINK_RADIUS
 from ram.dataset.kinematics import forward_kinematics, transformation_matrix
 
 
+@jaxtyped(typechecker=beartype)
+def latex_mean_and_ci(mean: float | Float[Tensor, ""] | Float[Tensor, "1"],
+                      lower: float | Float[Tensor, ""] | Float[Tensor, "1"],
+                      upper: float | Float[Tensor, ""] | Float[Tensor, "1"],
+                      decimals: int = 2) -> str:
+    return rf"\num{{{int(round(float(mean), ndigits=decimals))}({int(round(float(upper - mean), ndigits=decimals))}:{int(round(float(mean - lower), ndigits=decimals))})}}"
+
 
 @jaxtyped(typechecker=beartype)
 def get_plt_colour(idx: int) -> tuple:
