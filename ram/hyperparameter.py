@@ -40,7 +40,7 @@ if __name__ == "__main__":
     storage_path.mkdir(parents=True, exist_ok=True)
 
     study = optuna.create_study(study_name=args.study_name,
-                                direction="minimize",
+                                direction="maximize",
                                 sampler=optuna.samplers.TPESampler(),
                                 pruner=optuna.pruners.HyperbandPruner(),
                                 storage=f"sqlite:///{storage_path.resolve()}/hyperparameter.sqlite3",

@@ -79,7 +79,7 @@ def train(training_set_path: str,
         boundary_set = HomogeneousPoseSet(batch_size, False, validation_set.path + "_boundary", device)
 
     loss_function = torch.nn.BCEWithLogitsLoss(reduction='mean')
-    min_loss = torch.inf
+    max_metric = -torch.inf
     early_stopping_counter = 0
 
     logger = Logger(trial, hyperparameter, model, group)
@@ -103,25 +103,25 @@ def train(training_set_path: str,
                 with torch.no_grad():
                     validation(model, logger, boundary_set, loss_function)
                     logger.aggregate_validation(True)
-                    loss = validation(model, logger, validation_set, loss_function)
-                    logger.aggregate_validation(False)
-                    if loss < min_loss:
-                        min_loss = loss
+                    validation(model, logger, validation_set, loss_function)
+                    metric = logger.aggregate_validation(False)
+                    if metric > max_metric:
+                        max_metric = metric
                         early_stopping_counter = 0
                         logger.save_model()
                     else:
                         early_stopping_counter += 1
                         if early_stopping_counter == early_stopping:
                             (print('Early Stopping'))
-                            return min_loss
+                            return max_metric
                     if trial is not None:
-                        trial.report(loss, e)
+                        trial.report(metric, e)
                         if trial.should_prune():
                             logger.run.finish()
                             raise optuna.TrialPruned()
                     model.train()
         logger.checkpoint()
-    return min_loss
+    return max_metric
 
 
 if __name__ == '__main__':

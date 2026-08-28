@@ -139,12 +139,15 @@ class Logger:
         self.buffer["loss"] += loss
 
     @jaxtyped(typechecker=beartype)
-    def aggregate_validation(self, boundary: bool):
+    def aggregate_validation(self, boundary: bool) -> float:
         """
         Aggregate validation steps and post to W&B.
 
         Args:
             boundary: Whether we evaluated random or boundary samples.
+
+        Returns:
+            Mean balanced accuracy.
         """
         logit = torch.cat(self.buffer["logit"])
         label = torch.cat(self.buffer["label"])
@@ -153,9 +156,11 @@ class Logger:
         data = compute_metrics(logit, label, morph_index, self.threshold)
         data |= {"Loss": self.buffer["loss"] / logit.shape[0]}
 
+        output = data["Balanced Accuracy (Mean)"]
         data = self.assign_space(data, "Boundary" if boundary else "Validation")
         self.run.log(data=data, commit=False)
         self.buffer = {}
+        return output
 
     @staticmethod
     @jaxtyped(typechecker=beartype)
