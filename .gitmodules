@@ -1,4 +1,4 @@
 [submodule "paper_archive/rq2_accuracy/generative_graphik"]
-	path = paper_archive/rq2_accuracy/generative_graphik
+	path = paper_archive/RQ2/representation_accuracy/generative_graphik
 	url = https://github.com/utiasSTARS/generative-graphik
 	branch = revisions

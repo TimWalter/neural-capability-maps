@@ -7,14 +7,15 @@ from tqdm import tqdm
 from liegroups.numpy import SE3
 from graphik.robots import RobotRevolute
 from graphik.graphs.graph_revolute import ProblemGraphRevolute
-from paper_archive.rq2_accuracy.generative_graphik.generative_graphik.utils.dataset_generation import generate_struct_data, generate_data_point_from_pose
+from paper_archive.RQ2.representation_accuracy.generative_graphik.generative_graphik.utils.dataset_generation import \
+    generate_struct_data, generate_data_point_from_pose
 
 import ram.dataset.se3 as se3
-from ram.dataset.loader import ValidationSet
+from ram.dataset.loader import HomogeneousPoseSet
 
-
+device = torch.device("cuda")
 for path in ["test", "test_boundary"]:
-    eval_set = ValidationSet(1, False, path)
+    eval_set = HomogeneousPoseSet(1, False, path, device)
 
     robots = []
     graphs = []
@@ -28,7 +29,7 @@ for path in ["test", "test_boundary"]:
             "alpha": morph[:, 0].tolist(),
             "a": morph[:, 1].tolist(),
             "d": morph[:, 2].tolist(),
-            "theta": [0]*morph.shape[0],
+            "theta": [0] * morph.shape[0],
             "num_joints": morph.shape[0],
             "modified_dh": True,
         }
@@ -37,7 +38,7 @@ for path in ["test", "test_boundary"]:
         graphs += [ProblemGraphRevolute(robots[-1])]
         struct_data += [generate_struct_data(graphs[-1])]
 
-    directory = Path(__file__).parent / "data" / path
+    directory = Path(__file__).parent / "cache" / "ggik" / path
     directory.mkdir(parents=True, exist_ok=True)
     pickle.dump(graphs, open(directory / "graphs.pickle", "wb"))
 
@@ -48,10 +49,8 @@ for path in ["test", "test_boundary"]:
     pose_buffer = []
     morph_count = torch.zeros(len(graphs), dtype=torch.int)
 
-    eval_set = ValidationSet(1000, False, path)
-    for batch_idx, (morph, pose, label) in enumerate(tqdm(eval_set, desc=path)):
-        morph_idx = eval_set._get_batch(batch_idx)[:, 0].long()
-
+    eval_set = HomogeneousPoseSet(1000, False, path)
+    for batch_idx, (morph, pose, label, morph_idx) in enumerate(tqdm(eval_set, desc=path)):
         for inner_idx, (mi, p, l) in enumerate(zip(morph_idx, pose, label)):
             if morph_count[mi] >= 1000:
                 continue
@@ -66,9 +65,5 @@ for path in ["test", "test_boundary"]:
     torch.save(torch.tensor(morph_indices), directory / "morph_indices.pth")
     torch.save(torch.stack(pose_buffer), directory / "poses.pth")
 
-
-
     torch.save(torch.tensor(label_buffer), directory / "labels.pth")
     pickle.dump(data, open(directory / "data.pickle", "wb"))
-
-
