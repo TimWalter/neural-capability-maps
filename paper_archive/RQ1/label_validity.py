@@ -37,21 +37,24 @@ boundary_cell_indices = {}
 for dof in [5, 6, 7]:
     morphs[dof] = sample_morph(num_robots, dof, False, device)
     labels[dof] = []
-    cell_indices[dof] = []
+    cell_indices[dof] = {1: [], 2:[], 3:[], 4:[]}
     boundary_labels[dof] = []
-    boundary_cell_indices[dof] = []
+    boundary_cell_indices[dof] = {1: [], 2:[], 3:[], 4:[]}
     for m in morphs[dof]:
         # Random
         p, l = synthesise_data(m, num_samples, True, True)
-        c = se3.index(p)
         labels[dof] += [l]
-        cell_indices[dof] += [c]
         # Boundary
         bp, bl = sample_boundary(m, num_geodesic, num_geodesic_samples)
         bl = bl.cpu()
-        bc = se3.index(bp).cpu()
         boundary_labels[dof] += [bl]
-        boundary_cell_indices[dof] += [bc]
+
+        for level in levels:
+            se3.set_level(level)
+            c = se3.index(p)
+            cell_indices[dof][level] += [c]
+            bc = se3.index(bp).cpu()
+            boundary_cell_indices[dof][level]  += [bc]
 
 if not any(cache.iterdir()):
     cell_distance = []
@@ -88,8 +91,8 @@ if not any(cache.iterdir()):
             batch_size = None
 
             for (m, l, c, bl, bc) in tqdm(zip(morphs[dof],
-                                              labels[dof], cell_indices[dof],
-                                              boundary_labels[dof], boundary_cell_indices[dof]
+                                              labels[dof], cell_indices[dof][level],
+                                              boundary_labels[dof], boundary_cell_indices[dof][level]
                                               ), desc="Looping Morphologies"):
                 # Random
                 morph_runtime = 0.0
