@@ -56,7 +56,7 @@ def best_confidence_threshold(logit: Float[Tensor, "batch"],
 
 
 @jaxtyped(typechecker=beartype)
-def validate(model_id: int, batch_size: int, val_set_path: str, test_set_path: str, group: str):
+def validate(model_id: int, batch_size: int, val_set_path: str | None, test_set_path: str, group: str):
     """
     Evaluate a model on a test set.
 
@@ -72,19 +72,22 @@ def validate(model_id: int, batch_size: int, val_set_path: str, test_set_path: s
     model = Model.from_id(model_id).to(device)
     loss_function = torch.nn.BCEWithLogitsLoss(reduction='mean')
 
-    val_set = HomogeneousPoseSet(batch_size, False, val_set_path, device)
-    logits, labels, morph_indices = [], [], []
-    model.eval()
-    with torch.no_grad():
-        for morph, pose, label, morph_index in tqdm(val_set, desc="Thresholding"):
-            logits.append(model.predict(morph, pose).cpu())
-            labels.append(label.cpu())
-            morph_indices.append(morph_index.cpu())
-    logit, label = torch.cat(logits), torch.cat(labels)
-    morph_index = torch.cat(morph_indices)
+    if val_set_path:
+        val_set = HomogeneousPoseSet(batch_size, False, val_set_path, device)
+        logits, labels, morph_indices = [], [], []
+        model.eval()
+        with torch.no_grad():
+            for morph, pose, label, morph_index in tqdm(val_set, desc="Thresholding"):
+                logits.append(model.predict(morph, pose).cpu())
+                labels.append(label.cpu())
+                morph_indices.append(morph_index.cpu())
+        logit, label = torch.cat(logits), torch.cat(labels)
+        morph_index = torch.cat(morph_indices)
 
-    threshold = best_confidence_threshold(logit, label, morph_index)
-    print(f"Determined threshold: {threshold}")
+        threshold = best_confidence_threshold(logit, label, morph_index)
+        print(f"Determined threshold: {threshold}")
+    else:
+        threshold = 0.5
 
     test_set = HomogeneousPoseSet(batch_size, False, test_set_path, device)
     boundary_set = HomogeneousPoseSet(batch_size, False, test_set.path + "_boundary", device)
@@ -101,9 +104,9 @@ if __name__ == '__main__':
     torch.manual_seed(0)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_id", type=int, default=772)
+    parser.add_argument("--model_id", type=int, default=2071)
     parser.add_argument("--batch_size", type=int, default=1000)
-    parser.add_argument("--val_set_path", type=str, default="val")
+    parser.add_argument("--val_set_path", type=str, default=None)
     parser.add_argument("--test_set_path", type=str, default="test")
     parser.add_argument("--group", type=str, default=None, help="W&B group")
     args = parser.parse_args()
