@@ -16,9 +16,9 @@ if __name__ == '__main__':
     cache = Path(__file__).parent / "cache"
     cache.mkdir(parents=True, exist_ok=True)
 
-    model_ids = list(range(2055, 2065))
+    model_ids = list(range(2065, 2075))
     for model_id in model_ids:
-        validate(model_id, batch_size, "val", "test", "RAM-Old")
+        validate(model_id, batch_size, None, "test", "RAM")
 
     # Runtime
     validation_set = HomogeneousPoseSet(batch_size, False, "test", device)
@@ -27,11 +27,11 @@ if __name__ == '__main__':
     model.eval()
     runtime = []
     for batch_idx, (morph, pose, _, _) in enumerate(validation_set):
-        start = time.perf_counter()
+        start = time.perf_counter_ns()
         logit = model.predict(morph, pose)
-        runtime += [time.perf_counter() - start]
+        runtime += [time.perf_counter_ns() - start]
 
-    runtime = sum(runtime) / len(runtime) / batch_size * 10**6
+    runtime = sum(runtime) / len(runtime) / batch_size
     print(runtime)
 
     with open(cache / "runtime_ours.pkl", "wb") as file:
